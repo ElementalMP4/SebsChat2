@@ -15,6 +15,12 @@ type SelfUser struct {
 	PrivateKey        string `json:"privateKey"`
 	SigningPublicKey  string `json:"signingPublicKey"`
 	SigningPrivateKey string `json:"signingPrivateKey"`
+	Server            Server `json:"server"`
+}
+
+type Server struct {
+	Address string `json:"address"`
+	UseTls  bool   `json:"useTls"`
 }
 
 type MessageObject struct {
@@ -41,11 +47,6 @@ type EncryptedMessage struct {
 type InputMessage struct {
 	Objects    []MessageObject `json:"objects"`
 	Recipients []string        `json:"recipients"`
-}
-
-type KeyConfig struct {
-	PrivateKeys  string `json:"privateKeysDir"`
-	ExternalKeys string `json:"externalKeysDir"`
 }
 
 type Config struct {

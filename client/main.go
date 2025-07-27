@@ -27,13 +27,10 @@ func chatUI(win fyne.Window) fyne.CanvasObject {
 	return widget.NewLabel("Chat View")
 }
 
-func settingsUI(win fyne.Window) fyne.CanvasObject {
-	return widget.NewLabel("Settings View")
-}
-
 func main() {
 	a := app.NewWithID("sebschat-client")
 	w := a.NewWindow("SebsChat")
+	w.Resize(fyne.NewSize(900, 700))
 
 	// Check if config file exists
 	if _, err := os.Stat("./config.json"); os.IsNotExist(err) {
@@ -166,7 +163,6 @@ func main() {
 	globals.Contacts = contacts.Contacts
 
 	w.SetContent(mainAppContent(w))
-	w.Resize(fyne.NewSize(900, 700))
 	w.ShowAndRun()
 }
 
@@ -198,7 +194,7 @@ func mainAppContent(w fyne.Window) fyne.CanvasObject {
 			content.Objects = []fyne.CanvasObject{views.ContactsUI(w)}
 		case "settings":
 			btnSettings.Importance = widget.HighImportance
-			content.Objects = []fyne.CanvasObject{settingsUI(w)}
+			content.Objects = []fyne.CanvasObject{views.SettingsUI(w)}
 		}
 		content.Refresh()
 		navButtons.Refresh()
