@@ -34,30 +34,31 @@ func main() {
 
 	// Check if config file exists
 	if _, err := os.Stat("./config.json"); os.IsNotExist(err) {
-		dialog.ShowError(fmt.Errorf("config file not found. Please create a config.json file"), w)
-		w.ShowAndRun()
-		return
-	}
-
-	// Load config
-	file, err := os.Open("./config.json")
-	if err != nil {
-		dialog.ShowError(fmt.Errorf("error opening config file: %v", err), w)
-		w.ShowAndRun()
-		return
-	}
-	defer file.Close()
-	byteValue, err := io.ReadAll(file)
-	if err != nil {
-		dialog.ShowError(fmt.Errorf("error reading config file: %v", err), w)
-		w.ShowAndRun()
-		return
-	}
-	err = json.Unmarshal(byteValue, &globals.Config)
-	if err != nil {
-		dialog.ShowError(fmt.Errorf("error unmarshalling config: %v", err), w)
-		w.ShowAndRun()
-		return
+		globals.Config = types.Config{
+			UserFilePath:     "./profile.json",
+			ContactsFilePath: "./contacts.json",
+		}
+	} else {
+		// Load config
+		file, err := os.Open("./config.json")
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("error opening config file: %v", err), w)
+			w.ShowAndRun()
+			return
+		}
+		defer file.Close()
+		byteValue, err := io.ReadAll(file)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("error reading config file: %v", err), w)
+			w.ShowAndRun()
+			return
+		}
+		err = json.Unmarshal(byteValue, &globals.Config)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("error unmarshalling config: %v", err), w)
+			w.ShowAndRun()
+			return
+		}
 	}
 
 	// Check if user file exists
@@ -110,14 +111,14 @@ func main() {
 	}
 
 	// Load user file
-	file, err = os.Open(globals.Config.UserFilePath)
+	file, err := os.Open(globals.Config.UserFilePath)
 	if err != nil {
 		dialog.ShowError(fmt.Errorf("error opening user file: %v", err), w)
 		w.ShowAndRun()
 		return
 	}
 	defer file.Close()
-	byteValue, err = io.ReadAll(file)
+	byteValue, err := io.ReadAll(file)
 	if err != nil {
 		dialog.ShowError(fmt.Errorf("error reading user file: %v", err), w)
 		w.ShowAndRun()
