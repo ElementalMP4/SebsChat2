@@ -178,11 +178,12 @@ func main() {
 // Helper to return the main app content (your navigation etc.)
 func mainAppContent(w fyne.Window) fyne.CanvasObject {
 	content := container.NewStack(views.ContactsUI(w))
-	var btnDecryptor, btnChat, btnSettings, btnContacts *widget.Button
+	var btnDecryptor, btnEncryptor, btnChat, btnSettings, btnContacts *widget.Button
 	var navButtons *fyne.Container
 
 	setActive := func(active string) {
 		btnDecryptor.Importance = widget.MediumImportance
+		btnEncryptor.Importance = widget.MediumImportance
 		btnChat.Importance = widget.MediumImportance
 		btnSettings.Importance = widget.MediumImportance
 		btnContacts.Importance = widget.MediumImportance
@@ -191,6 +192,9 @@ func mainAppContent(w fyne.Window) fyne.CanvasObject {
 		case "decryptor":
 			btnDecryptor.Importance = widget.HighImportance
 			content.Objects = []fyne.CanvasObject{views.MessageDecryptorUI(w)}
+		case "encryptor":
+			btnEncryptor.Importance = widget.HighImportance
+			content.Objects = []fyne.CanvasObject{views.MessageEncryptorUI(w)}
 		case "chat":
 			btnChat.Importance = widget.HighImportance
 			content.Objects = []fyne.CanvasObject{chatUI(w)}
@@ -205,12 +209,14 @@ func mainAppContent(w fyne.Window) fyne.CanvasObject {
 		navButtons.Refresh()
 	}
 
-	btnDecryptor = widget.NewButtonWithIcon("Decryptor", theme.DocumentIcon(), func() { setActive("decryptor") })
+	btnDecryptor = widget.NewButtonWithIcon("Decrypt", theme.VisibilityIcon(), func() { setActive("decryptor") })
+	btnEncryptor = widget.NewButtonWithIcon("Encrypt", theme.VisibilityOffIcon(), func() { setActive("encryptor") })
 	btnChat = widget.NewButtonWithIcon("Chat", theme.MailSendIcon(), func() { setActive("chat") })
-	btnContacts = widget.NewButtonWithIcon("Contacts", theme.FolderIcon(), func() { setActive("contacts") })
+	btnContacts = widget.NewButtonWithIcon("Contacts", theme.AccountIcon(), func() { setActive("contacts") })
 	btnSettings = widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), func() { setActive("settings") })
 
 	navButtons = container.NewVBox(
+		btnEncryptor,
 		btnDecryptor,
 		btnChat,
 		btnContacts,
