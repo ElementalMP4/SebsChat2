@@ -132,3 +132,15 @@ func MessageToJson(input types.EncryptedMessage) ([]byte, error) {
 	}
 	return data, nil
 }
+
+func ContactToJson() ([]byte, error) {
+	kex := types.KeyExchange{
+		KeyFrom: globals.SelfUser.Name,
+		Key:     globals.SelfUser.PublicKey,
+	}
+	data, err := json.MarshalIndent(kex, "", "  ")
+	if err != nil {
+		return []byte{}, fmt.Errorf("failed to marshal key exchange: %v", err)
+	}
+	return data, nil
+}

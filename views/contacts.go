@@ -23,42 +23,43 @@ func ContactsUI(win fyne.Window) fyne.CanvasObject {
 
 func showContactList(content *fyne.Container, win fyne.Window) {
 	listContainer := container.NewVBox()
-	// Sort contacts alphabetically by name
 	sorted := make([]types.Contact, len(globals.Contacts))
 	copy(sorted, globals.Contacts)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Name < sorted[j].Name
 	})
+
 	for idx, c := range sorted {
-		i := idx // capture for closure
+		i := idx
 		contactBtn := widget.NewButton(c.Name, func() {
-			content.Objects = []fyne.CanvasObject{editContactForm(win, &sorted[i], func(updated *types.Contact, deleted bool) {
-				if deleted {
-					// Remove from contacts
-					for j, cc := range globals.Contacts {
-						if cc.Name == sorted[i].Name && cc.PublicKey == sorted[i].PublicKey {
-							globals.Contacts = append(globals.Contacts[:j], globals.Contacts[j+1:]...)
-							break
+			content.Objects = []fyne.CanvasObject{
+				editContactForm(win, &sorted[i], func(updated *types.Contact, deleted bool) {
+					if deleted {
+						for j, cc := range globals.Contacts {
+							if cc.Name == sorted[i].Name && cc.PublicKey == sorted[i].PublicKey {
+								globals.Contacts = append(globals.Contacts[:j], globals.Contacts[j+1:]...)
+								break
+							}
+						}
+					} else if updated != nil {
+						for j, cc := range globals.Contacts {
+							if cc.Name == sorted[i].Name && cc.PublicKey == sorted[i].PublicKey {
+								globals.Contacts[j] = *updated
+								break
+							}
 						}
 					}
-				} else if updated != nil {
-					// Update contact
-					for j, cc := range globals.Contacts {
-						if cc.Name == sorted[i].Name && cc.PublicKey == sorted[i].PublicKey {
-							globals.Contacts[j] = *updated
-							break
-						}
+					err := utils.SaveContacts()
+					if err != nil {
+						dialog.ShowError(err, win)
 					}
-				}
-				err := utils.SaveContacts()
-				if err != nil {
-					dialog.ShowError(err, win)
-				}
-				showContactList(content, win)
-			})}
+					showContactList(content, win)
+				}),
+			}
 		})
 		listContainer.Add(contactBtn)
 	}
+
 	addBtn := widget.NewButton("Add Contact", func() {
 		content.Objects = []fyne.CanvasObject{addContactForm(win, func(newContact *types.Contact) {
 			if newContact != nil {
@@ -73,11 +74,56 @@ func showContactList(content *fyne.Container, win fyne.Window) {
 			showContactList(content, win)
 		})}
 	})
+
+	exportBtn := widget.NewButton("Export Contact", func() {
+		showExportContactDialog(win)
+	})
+
+	buttonRow := container.NewGridWithColumns(2, addBtn, exportBtn)
+
+	// I refuse to show "You have 1 contacts" or "You have 1 contact(s)"
+	contactOrContacts := "contact"
+	if len(sorted) != 1 {
+		contactOrContacts += "s"
+	}
+
+	contactCountLabel := widget.NewLabel(fmt.Sprintf("You have %d %s", len(sorted), contactOrContacts))
+
 	content.Objects = []fyne.CanvasObject{
-		addBtn,
+		buttonRow,
+		contactCountLabel,
 		widget.NewSeparator(),
 		listContainer,
 	}
+}
+
+func showExportContactDialog(win fyne.Window) {
+	fileDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+		if err != nil {
+			dialog.ShowError(err, win)
+			return
+		}
+		if writer == nil {
+			return
+		}
+		defer writer.Close()
+
+		kex, err := utils.ContactToJson()
+		if err != nil {
+			dialog.ShowError(err, win)
+			return
+		}
+
+		_, wErr := writer.Write(kex)
+		if wErr != nil {
+			dialog.ShowError(wErr, win)
+			return
+		}
+
+		dialog.ShowInformation("Export", "Contact exported successfully!", win)
+	}, win)
+	fileDialog.SetFileName(fmt.Sprintf("%s.imp", globals.SelfUser.Name))
+	fileDialog.Show()
 }
 
 func addContactForm(win fyne.Window, onAdd func(*types.Contact), onCancel func()) fyne.CanvasObject {

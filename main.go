@@ -37,7 +37,7 @@ func main() {
 
 	// Check if config file exists
 	if _, err := os.Stat("./config.json"); os.IsNotExist(err) {
-		dialog.ShowError(fmt.Errorf("Config file not found. Please create a config.json file."), w)
+		dialog.ShowError(fmt.Errorf("config file not found. Please create a config.json file"), w)
 		w.ShowAndRun()
 		return
 	}
@@ -73,7 +73,7 @@ func main() {
 		form.OnSubmit = func() {
 			name := nameEntry.Text
 			if name == "" {
-				dialog.ShowError(fmt.Errorf("Name cannot be empty"), w)
+				dialog.ShowError(fmt.Errorf("name cannot be empty"), w)
 				return
 			}
 
@@ -141,12 +141,12 @@ func main() {
 		}
 		data, err := json.MarshalIndent(contacts, "", "  ")
 		if err != nil {
-			dialog.ShowError(fmt.Errorf("Failed to marshal contacts: %v", err), w)
+			dialog.ShowError(fmt.Errorf("failed to marshal contacts: %v", err), w)
 			return
 		}
 		err = os.WriteFile(globals.Config.ContactsFilePath, data, 0600)
 		if err != nil {
-			dialog.ShowError(fmt.Errorf("Failed to write contacts file: %v", err), w)
+			dialog.ShowError(fmt.Errorf("failed to write contacts file: %v", err), w)
 			return
 		}
 	}
@@ -206,9 +206,9 @@ func mainAppContent(w fyne.Window) fyne.CanvasObject {
 
 	btnDecryptor = widget.NewButtonWithIcon("Decrypt", theme.VisibilityIcon(), func() { setActive("decryptor") })
 	btnEncryptor = widget.NewButtonWithIcon("Encrypt", theme.VisibilityOffIcon(), func() { setActive("encryptor") })
-	btnChat = widget.NewButtonWithIcon("Chat", theme.MailSendIcon(), func() { setActive("chat") })
 	btnContacts = widget.NewButtonWithIcon("Contacts", theme.AccountIcon(), func() { setActive("contacts") })
 	btnSettings = widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), func() { setActive("settings") })
+	btnChat = widget.NewButtonWithIcon("Chat", theme.MailSendIcon(), func() { setActive("chat") })
 
 	navButtons = container.NewVBox(
 		btnEncryptor,
