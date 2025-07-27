@@ -97,17 +97,12 @@ func main() {
 				SigningPrivateKey: utils.BytesToBase64(privSign),
 			}
 
-			data, err := json.MarshalIndent(selfUser, "", "  ")
-			if err != nil {
-				dialog.ShowError(fmt.Errorf("Failed to marshal user: %v", err), w)
-				return
-			}
-			err = os.WriteFile(globals.Config.UserFilePath, data, 0600)
-			if err != nil {
-				dialog.ShowError(fmt.Errorf("Failed to write user file: %v", err), w)
-				return
-			}
 			globals.SelfUser = selfUser
+			err = utils.SaveUser()
+			if err != nil {
+				dialog.ShowError(err, w)
+				return
+			}
 			w.SetContent(mainAppContent(w))
 		}
 		w.SetContent(container.NewVBox(

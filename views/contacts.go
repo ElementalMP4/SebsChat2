@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sebschat/globals"
 	"sebschat/types"
+	"sebschat/utils"
 	"sort"
 
 	"fyne.io/fyne/v2"
@@ -49,6 +50,10 @@ func showContactList(content *fyne.Container, win fyne.Window) {
 						}
 					}
 				}
+				err := utils.SaveContacts()
+				if err != nil {
+					dialog.ShowError(err, win)
+				}
 				showContactList(content, win)
 			})}
 		})
@@ -58,6 +63,10 @@ func showContactList(content *fyne.Container, win fyne.Window) {
 		content.Objects = []fyne.CanvasObject{addContactForm(win, func(newContact *types.Contact) {
 			if newContact != nil {
 				globals.Contacts = append(globals.Contacts, *newContact)
+			}
+			err := utils.SaveContacts()
+			if err != nil {
+				dialog.ShowError(err, win)
 			}
 			showContactList(content, win)
 		}, func() {

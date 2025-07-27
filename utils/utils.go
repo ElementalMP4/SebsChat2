@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
 	"sebschat/globals"
 	"sebschat/types"
 )
@@ -92,4 +94,31 @@ func CheckContactsExist(recipients []string) []string {
 		}
 	}
 	return notFound
+}
+
+func SaveContacts() error {
+	contacts := types.Contacts{
+		Contacts: globals.Contacts,
+	}
+	data, err := json.MarshalIndent(contacts, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal contacts: %v", err)
+	}
+	err = os.WriteFile(globals.Config.ContactsFilePath, data, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to write contacts file: %v", err)
+	}
+	return nil
+}
+
+func SaveUser() error {
+	data, err := json.MarshalIndent(globals.SelfUser, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal user: %v", err)
+	}
+	err = os.WriteFile(globals.Config.UserFilePath, data, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to write user file: %v", err)
+	}
+	return nil
 }
