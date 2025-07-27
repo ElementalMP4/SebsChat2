@@ -72,7 +72,9 @@ func GetContactFromHash(hash string) *types.Contact {
 
 func ContactExists(contactName string) bool {
 	for _, contact := range globals.Contacts {
-		return contact.Name == contactName
+		if contact.Name == contactName {
+			return true
+		}
 	}
 	return false
 }
@@ -121,4 +123,12 @@ func SaveUser() error {
 		return fmt.Errorf("failed to write user file: %v", err)
 	}
 	return nil
+}
+
+func MessageToJson(input types.EncryptedMessage) ([]byte, error) {
+	data, err := json.MarshalIndent(input, "", "  ")
+	if err != nil {
+		return []byte{}, fmt.Errorf("failed to marshal message: %v", err)
+	}
+	return data, nil
 }

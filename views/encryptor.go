@@ -2,8 +2,9 @@ package views
 
 import (
 	"fmt"
+	"sebschat/cryptography"
+	"sebschat/types"
 	"sebschat/utils"
-	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -49,8 +50,29 @@ func MessageEncryptorUI(win fyne.Window) fyne.CanvasObject {
 	addMessageBox := func() {
 		entry := widget.NewMultiLineEntry()
 		entry.SetPlaceHolder("Type part of your message...")
+
+		// Container that holds the entry + delete button
+		var boxContainer *fyne.Container
+		boxContainer = container.NewBorder(nil, nil, nil,
+			widget.NewButton("Delete", func() {
+				if len(messageBoxes) <= 1 {
+					return // enforce at least one
+				}
+				// Remove from slices
+				for i, e := range messageBoxes {
+					if e == entry {
+						messageBoxes = append(messageBoxes[:i], messageBoxes[i+1:]...)
+						break
+					}
+				}
+				messageList.Remove(boxContainer)
+				messageList.Refresh()
+			}),
+			entry,
+		)
+
 		messageBoxes = append(messageBoxes, entry)
-		messageList.Add(entry)
+		messageList.Add(boxContainer)
 		messageList.Refresh()
 	}
 
@@ -73,7 +95,11 @@ func MessageEncryptorUI(win fyne.Window) fyne.CanvasObject {
 			return
 		}
 
-		encryptedData := fakeEncrypt(selectedRecipients, parts)
+		encryptedData, err := encryptMessages(selectedRecipients, parts)
+		if err != nil {
+			dialog.ShowError(err, win)
+			return
+		}
 
 		fd := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
 			if err != nil {
@@ -85,7 +111,13 @@ func MessageEncryptorUI(win fyne.Window) fyne.CanvasObject {
 			}
 			defer writer.Close()
 
-			_, wErr := writer.Write([]byte(encryptedData))
+			messageBytes, err := utils.MessageToJson(encryptedData)
+			if err != nil {
+				dialog.ShowError(err, win)
+				return
+			}
+
+			_, wErr := writer.Write(messageBytes)
 			if wErr != nil {
 				dialog.ShowError(wErr, win)
 				return
@@ -108,6 +140,23 @@ func MessageEncryptorUI(win fyne.Window) fyne.CanvasObject {
 	)
 }
 
-func fakeEncrypt(recipients []string, messages []string) string {
-	return fmt.Sprintf("Encrypted for: %s\nMessages: %s", strings.Join(recipients, ", "), strings.Join(messages, " | "))
+func encryptMessages(recipients []string, messages []string) (types.EncryptedMessage, error) {
+	var objects []types.MessageObject
+
+	for _, message := range messages {
+		objects = append(objects, types.MessageObject{
+			Type:    "text",
+			Content: &message,
+		})
+	}
+
+	input := types.InputMessage{
+		Recipients: recipients,
+		Objects:    objects,
+	}
+	encrypted, err := cryptography.Encrypt(input)
+	if err != nil {
+		return types.EncryptedMessage{}, err
+	}
+	return encrypted, nil
 }
