@@ -23,10 +23,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func chatUI(win fyne.Window) fyne.CanvasObject {
-	return widget.NewLabel("Chat View")
-}
-
 func main() {
 	a := app.NewWithID("sebschat-client")
 	w := a.NewWindow("SebsChat")
@@ -189,7 +185,7 @@ func mainAppContent(w fyne.Window) fyne.CanvasObject {
 			content.Objects = []fyne.CanvasObject{views.MessageEncryptorUI(w)}
 		case "chat":
 			btnChat.Importance = widget.HighImportance
-			content.Objects = []fyne.CanvasObject{chatUI(w)}
+			content.Objects = []fyne.CanvasObject{views.ChatUI(w)}
 		case "contacts":
 			btnContacts.Importance = widget.HighImportance
 			content.Objects = []fyne.CanvasObject{views.ContactsUI(w)}
