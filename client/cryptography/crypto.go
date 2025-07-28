@@ -163,9 +163,6 @@ func Encrypt(inputMessage types.InputMessage) (types.EncryptedMessage, error) {
 
 func Decrypt(msg types.EncryptedMessage) (types.DecryptedMessage, error) {
 	hashedUsername := utils.HashString(globals.SelfUser.Name)
-	if msg.Sender == hashedUsername {
-		return types.DecryptedMessage{}, fmt.Errorf("cannot decrypt message sent by self")
-	}
 
 	if len(msg.EncryptedKeys) == 0 {
 		return types.DecryptedMessage{}, fmt.Errorf("message contains no keys")
