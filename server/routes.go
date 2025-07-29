@@ -123,31 +123,36 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+
 	user, err := GetUserByUsername(req.Username)
 	if err != nil {
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
 	}
+
 	// Check password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(req.Password)); err != nil {
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
 	}
+
 	// Check TOTP code
 	if !totp.Validate(req.TOTPCode, user.TOTPSecret) {
 		http.Error(w, "Invalid TOTP code", http.StatusUnauthorized)
 		return
 	}
+
 	// Generate JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"username": user.Username,
-		"exp":      time.Now().Add(time.Hour * 24).Unix(),
+		"exp":      time.Now().Add((time.Hour * 24) * 30).Unix(), // One month by default, might want to make this configurable later
 	})
 	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
+
 	resp := LoginResponse{Token: tokenString}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
