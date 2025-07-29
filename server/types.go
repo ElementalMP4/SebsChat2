@@ -1,5 +1,10 @@
 package main
 
+var (
+	WS_CONNECT_OK   string = "CONNECT_OK"
+	WS_CHAT_MESSAGE string = "CHAT_MESSAGE"
+)
+
 type User struct {
 	ID             int
 	Username       string
@@ -25,4 +30,33 @@ type LoginRequest struct {
 
 type LoginResponse struct {
 	Token string `json:"token"`
+}
+
+type WebSocketMessage struct {
+	Type    string `json:"type"`
+	Payload any    `json:"payload"`
+}
+
+type EncryptedMessageObject struct {
+	Type      string `json:"type"`
+	Content   string `json:"content"`
+	Verify    string `json:"verify"`
+	Signature string `json:"signature"`
+}
+
+type EncryptedMessage struct {
+	Objects          []EncryptedMessageObject `json:"objects"`
+	EncryptedKeys    map[string]string        `json:"encryptedKeys"`
+	SigningPublicKey string                   `json:"signingPublicKey"`
+	Sender           string                   `json:"sender"`
+	Receipt          string                   `json:"receipt"`
+}
+
+type SendReceipt struct {
+	Receipt string   `json:"receipt"`
+	SentTo  []string `json:"sentTo"`
+}
+
+type JustOneMessage struct {
+	Message string `json:"message"`
 }

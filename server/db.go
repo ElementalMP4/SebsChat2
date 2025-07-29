@@ -26,7 +26,6 @@ func initDB() {
 	}
 }
 
-// Create a new user
 func CreateUser(username, hashedPassword, totpSecret string) (*User, error) {
 	res, err := db.Exec("INSERT INTO users (username, hashed_password, totp_secret) VALUES (?, ?, ?)", username, hashedPassword, totpSecret)
 	if err != nil {
@@ -36,19 +35,16 @@ func CreateUser(username, hashedPassword, totpSecret string) (*User, error) {
 	return &User{ID: int(id), Username: username, HashedPassword: hashedPassword, TOTPSecret: totpSecret}, nil
 }
 
-// Update an existing user
 func UpdateUser(id int, username, hashedPassword, totpSecret string) error {
 	_, err := db.Exec("UPDATE users SET username=?, hashed_password=?, totp_secret=? WHERE id=?", username, hashedPassword, totpSecret, id)
 	return err
 }
 
-// Delete a user
 func DeleteUser(id int) error {
 	_, err := db.Exec("DELETE FROM users WHERE id=?", id)
 	return err
 }
 
-// Get a user by username
 func GetUserByUsername(username string) (*User, error) {
 	row := db.QueryRow("SELECT id, username, hashed_password, totp_secret FROM users WHERE username=?", username)
 	var user User

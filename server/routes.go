@@ -8,57 +8,11 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 )
-
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
-func gatewayHandler(w http.ResponseWriter, r *http.Request) {
-	// Get token from Sec-WebSocket-Protocol header
-	authHeader := r.Header.Get("Sec-WebSocket-Protocol")
-	if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		http.Error(w, "Missing or invalid Authorization header", http.StatusUnauthorized)
-		return
-	}
-	tokenString := authHeader[7:]
-
-	// Parse and validate JWT
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
-		}
-		return jwtSecret, nil
-	})
-	if err != nil || !token.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
-	// Echo back the Sec-WebSocket-Protocol header
-	upgrader.Subprotocols = []string{authHeader}
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		fmt.Println("WebSocket upgrade error:", err)
-		return
-	}
-	defer conn.Close()
-
-	// Send OK message
-	conn.WriteMessage(websocket.TextMessage, []byte("OK"))
-
-	for {
-		_, msg, err := conn.ReadMessage()
-		if err != nil {
-			break
-		}
-		fmt.Printf("Received: %s\n", msg)
-		conn.WriteMessage(websocket.TextMessage, []byte("Echo: "+string(msg)))
-	}
-}
 
 func registerHandler(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
@@ -156,4 +110,92 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	resp := LoginResponse{Token: tokenString}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func messageHandler(w http.ResponseWriter, r *http.Request) {
+	// Check Authorization header for Bearer token
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		http.Error(w, "Missing or invalid Authorization header", http.StatusUnauthorized)
+		return
+	}
+	tokenString := authHeader[7:]
+
+	// Parse and validate JWT
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
+		return jwtSecret, nil
+	})
+	if err != nil || !token.Valid {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+		return
+	}
+	username, ok := claims["username"].(string)
+	if !ok || username == "" {
+		http.Error(w, "Username not found in token", http.StatusUnauthorized)
+		return
+	}
+
+	var msg EncryptedMessage
+	if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if msg.Sender != username {
+		http.Error(w, "Sender does not match token", http.StatusUnauthorized)
+		return
+	}
+
+	receipt := uuid.NewString()
+	var sentTo []string
+
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+
+	for recipient := range msg.EncryptedKeys {
+		conn, ok := userSessions[recipient]
+		if !ok {
+			continue // user not online
+		}
+
+		// Strip out irrelevant keys
+		userMsg := msg
+		userMsg.EncryptedKeys = map[string]string{
+			recipient: msg.EncryptedKeys[recipient],
+		}
+		userMsg.Receipt = receipt
+
+		wsMsg := WebSocketMessage{
+			Type:    WS_CHAT_MESSAGE,
+			Payload: userMsg,
+		}
+
+		jsonMsg, err := json.Marshal(wsMsg)
+		if err != nil {
+			fmt.Println("Failed to marshal message for", recipient, ":", err)
+			continue
+		}
+
+		if err := conn.WriteMessage(websocket.TextMessage, jsonMsg); err != nil {
+			fmt.Println("Failed to send message to", recipient, ":", err)
+			continue
+		}
+
+		sentTo = append(sentTo, recipient)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(SendReceipt{
+		Receipt: receipt,
+		SentTo:  sentTo,
+	})
 }
