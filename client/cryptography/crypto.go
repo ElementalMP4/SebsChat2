@@ -17,7 +17,7 @@ import (
 	"golang.org/x/crypto/curve25519"
 )
 
-func Encrypt(inputMessage types.InputMessage) (types.EncryptedMessage, error) {
+func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMessage, error) {
 	senderPriv, err := utils.GetSelfPrivateKey()
 	if err != nil {
 		return types.EncryptedMessage{}, err
@@ -142,9 +142,12 @@ func Encrypt(inputMessage types.InputMessage) (types.EncryptedMessage, error) {
 		if err != nil {
 			return types.EncryptedMessage{}, fmt.Errorf("error encrypting symmetric key: %v", err)
 		}
-		userHash := utils.HashString(user)
 
-		encryptedKeys[userHash] = base64.StdEncoding.EncodeToString(append(encNonce, encKey...))
+		userNameOrHash := user
+		if hashNames {
+			userNameOrHash = utils.HashString(user)
+		}
+		encryptedKeys[userNameOrHash] = base64.StdEncoding.EncodeToString(append(encNonce, encKey...))
 	}
 
 	signingPub, err := utils.GetSelfSigningPublicKey()
@@ -152,27 +155,41 @@ func Encrypt(inputMessage types.InputMessage) (types.EncryptedMessage, error) {
 		return types.EncryptedMessage{}, err
 	}
 
+	senderNameOrHash := globals.SelfUser.Name
+	if hashNames {
+		senderNameOrHash = utils.HashString(globals.SelfUser.Name)
+	}
+
 	outputMsg := types.EncryptedMessage{
 		Objects:          messageObjects,
 		EncryptedKeys:    encryptedKeys,
 		SigningPublicKey: base64.StdEncoding.EncodeToString(signingPub),
-		Sender:           utils.HashString(globals.SelfUser.Name),
+		Sender:           senderNameOrHash,
 	}
 	return outputMsg, nil
 }
 
-func Decrypt(msg types.EncryptedMessage) (types.DecryptedMessage, error) {
-	hashedUsername := utils.HashString(globals.SelfUser.Name)
+func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMessage, error) {
+	selfUsernameOrHash := globals.SelfUser.Name
+	if namesAreHashed {
+		selfUsernameOrHash = utils.HashString(globals.SelfUser.Name)
+	}
 
 	if len(msg.EncryptedKeys) == 0 {
 		return types.DecryptedMessage{}, fmt.Errorf("message contains no keys")
 	}
 
-	if _, ok := msg.EncryptedKeys[hashedUsername]; !ok {
+	if _, ok := msg.EncryptedKeys[selfUsernameOrHash]; !ok {
 		return types.DecryptedMessage{}, fmt.Errorf("message does not contain key for this user")
 	}
 
-	sender := utils.GetContactFromHash(msg.Sender)
+	var sender *types.Contact = nil
+	if namesAreHashed {
+		sender = utils.GetContactFromHash(msg.Sender)
+	} else {
+		sender = utils.GetContact(msg.Sender)
+	}
+
 	if sender == nil {
 		return types.DecryptedMessage{}, fmt.Errorf("sender not found in contacts - %s", strings.Join(utils.GetContactNames(), ", "))
 	}
@@ -193,7 +210,7 @@ func Decrypt(msg types.EncryptedMessage) (types.DecryptedMessage, error) {
 		return types.DecryptedMessage{}, fmt.Errorf("error deriving shared key: %v", err)
 	}
 
-	encKeyFull, err := base64.StdEncoding.DecodeString(msg.EncryptedKeys[hashedUsername])
+	encKeyFull, err := base64.StdEncoding.DecodeString(msg.EncryptedKeys[selfUsernameOrHash])
 	if err != nil {
 		return types.DecryptedMessage{}, fmt.Errorf("error decoding encrypted key: %v", err)
 	}

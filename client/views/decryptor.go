@@ -60,7 +60,7 @@ func decryptToString(data []byte) (string, error) {
 	if err := json.Unmarshal(data, &result); err != nil {
 		return "", fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
-	decrypted, err := cryptography.Decrypt(result)
+	decrypted, err := cryptography.Decrypt(result, true)
 	if err != nil {
 		return "", err
 	}
