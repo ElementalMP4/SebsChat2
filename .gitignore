@@ -3,3 +3,5 @@ sebschat
 .DS_Store
 *.exe
 *.app
+*.db
+*.jwt
