@@ -22,7 +22,6 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Sec-WebSocket-Protocol")
 	if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
 		http.Error(w, "Missing or invalid Authorization header", http.StatusUnauthorized)
-		fmt.Println("Auth header bad")
 		return
 	}
 	tokenString := authHeader[7:]
@@ -30,13 +29,11 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse and validate JWT
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			fmt.Println("Signing method bad")
 			return nil, fmt.Errorf("unexpected signing method")
 		}
 		return jwtSecret, nil
 	})
 	if err != nil || !token.Valid {
-		fmt.Printf("Token bad %v\n", err)
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
