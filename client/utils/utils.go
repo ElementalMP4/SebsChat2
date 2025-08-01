@@ -1,13 +1,16 @@
 package utils
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"sebschat/globals"
+	"sebschat/net"
 	"sebschat/types"
 
 	"fyne.io/fyne/v2"
@@ -163,4 +166,31 @@ func MakeHeaderLabel(label string) fyne.CanvasObject {
 		container.NewCenter(text),
 		separator,
 	)
+}
+
+func SendEncryptedMessage(encrypted types.EncryptedMessage) error {
+	jsonBody, err := json.Marshal(encrypted)
+	if err != nil {
+		return fmt.Errorf("failed to encode request: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", globals.SelfUser.Server.GetApiAddress()+"/api/message", bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", globals.SelfUser.Server.Token))
+
+	resp, err := net.PerformRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to send message: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("message was rejected: %s", resp.Status)
+	}
+
+	return nil
 }

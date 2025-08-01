@@ -1,13 +1,27 @@
 package views
 
 import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"sync"
+	"time"
+
+	"sebschat/cryptography"
+	"sebschat/globals"
+	"sebschat/types"
 	"sebschat/utils"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/gorilla/websocket"
 )
 
 // Helper function to create a message bubble with bold username and left padding
@@ -51,13 +65,139 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 	messageEntry.SetPlaceHolder("Select a contact to start chatting...")
 	messageEntry.Disable()
 
+	var (
+		wsConn              *websocket.Conn
+		connMutex           sync.Mutex // to safely access wsConn
+		conversationTargets []string
+
+		stopReconnect chan struct{}
+	)
+
+	// Connect and listen with gorilla websocket, auto-reconnect on drop
+	connectWebSocket := func() {
+		go func() {
+			for {
+				select {
+				case <-stopReconnect:
+					return
+				default:
+				}
+
+				gatewayURL := globals.SelfUser.Server.GetGatewayAddress()
+				u, err := url.Parse(gatewayURL)
+				if err != nil {
+					log.Println("Invalid gateway URL:", err)
+					time.Sleep(3 * time.Second)
+					continue
+				}
+
+				// Prepare headers with Sec-WebSocket-Protocol
+				headers := http.Header{}
+				headers.Set("Sec-WebSocket-Protocol", "Bearer "+globals.SelfUser.Server.Token)
+
+				log.Println("Connecting to", u.String())
+				c, _, err := websocket.DefaultDialer.Dial(u.String(), headers)
+				if err != nil {
+					log.Println("WebSocket dial failed:", err)
+					time.Sleep(3 * time.Second)
+					continue
+				}
+
+				connMutex.Lock()
+				wsConn = c
+				connMutex.Unlock()
+
+				log.Println("WebSocket connected")
+
+				// Read loop
+				for {
+					var msg types.WebSocketMessageContainer
+					err := c.ReadJSON(&msg)
+					if err != nil {
+						log.Println("WebSocket read error:", err)
+						break
+					}
+
+					switch msg.Type {
+					case "CONNECT_OK":
+						log.Println("Connected to gateway successfully")
+					case "CHAT_MESSAGE":
+						var encryptedMessage types.EncryptedMessage
+						err = json.Unmarshal(msg.Payload, &encryptedMessage)
+						if err != nil {
+							dialog.ShowError(fmt.Errorf("error unmarshalling message: %v", err), win)
+							return
+						}
+
+						decrypted, err := cryptography.Decrypt(encryptedMessage, false)
+						if err != nil {
+							dialog.ShowError(fmt.Errorf("error decrypting message: %v", err), win)
+							return
+						}
+
+						for _, object := range decrypted.Objects {
+							if object.Type == "text" {
+								history.Add(messageBubble(decrypted.Author, *object.Content))
+							}
+						}
+					}
+				}
+
+				// Cleanup on disconnect
+				connMutex.Lock()
+				if wsConn != nil {
+					wsConn.Close()
+					wsConn = nil
+				}
+				connMutex.Unlock()
+
+				log.Println("WebSocket disconnected, retrying in 3s...")
+				time.Sleep(3 * time.Second)
+			}
+		}()
+	}
+
+	stopReconnect = make(chan struct{})
+	connectWebSocket()
+
 	// Send message on Enter key
 	messageEntry.OnSubmitted = func(text string) {
-		if text != "" && !messageEntry.Disabled() {
-			history.Add(messageBubble("You", text))
-			messageEntry.SetText("")
-			historyScroll.ScrollToBottom()
+		if text == "" || messageEntry.Disabled() {
+			return
 		}
+
+		connMutex.Lock()
+		defer connMutex.Unlock()
+		if wsConn == nil {
+			log.Println("WebSocket is not connected")
+			return
+		}
+
+		inputMessage := types.InputMessage{
+			Recipients: conversationTargets,
+			Objects: []types.MessageObject{
+				{
+					Type:    "text",
+					Content: &text,
+				},
+			},
+		}
+
+		encrypted, err := cryptography.Encrypt(inputMessage, false)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("error encrypting message: %v", err), win)
+			return
+		}
+
+		err = utils.SendEncryptedMessage(encrypted)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("error sending message: %v", err), win)
+			return
+		}
+
+		history.Add(messageBubble("You", text))
+		messageEntry.SetText("")
+		historyScroll.ScrollToBottom()
 	}
 
 	bottomBar := container.NewBorder(nil, nil, nil, nil, messageEntry)
@@ -87,6 +227,9 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 			history.Objects = nil
 			history.Refresh()
 			historyScroll.ScrollToBottom()
+
+			// Set current target
+			conversationTargets = []string{contactName}
 		})
 		contactButtons[i] = btn
 	}

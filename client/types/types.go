@@ -1,6 +1,9 @@
 package types
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type Contacts struct {
 	Contacts []Contact `json:"contacts"`
@@ -87,6 +90,11 @@ type LoginResponse struct {
 	Token string `json:"token"`
 }
 
+type WebSocketMessageContainer struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
 func (server Server) GetApiAddress() string {
 	protocol := "http"
 	if server.UseTls {
@@ -100,5 +108,5 @@ func (server Server) GetGatewayAddress() string {
 	if server.UseTls {
 		protocol += "s"
 	}
-	return fmt.Sprintf("%s://%s", protocol, server.Address)
+	return fmt.Sprintf("%s://%s/gateway", protocol, server.Address)
 }
