@@ -19,13 +19,13 @@ type RegisterRequest struct {
 
 type RegisterResponse struct {
 	Username   string `json:"username"`
-	TOTPSecret string `json:"totp_secret"`
+	TOTPSecret string `json:"totpSecret"`
 }
 
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
-	TOTPCode string `json:"totp_code"`
+	TOTPCode string `json:"totpCode"`
 }
 
 type LoginResponse struct {

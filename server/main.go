@@ -52,6 +52,7 @@ func main() {
 	r.HandleFunc("/api/register", registerHandler).Methods("POST")
 	r.HandleFunc("/api/login", loginHandler).Methods("POST")
 	r.HandleFunc("/api/message", messageHandler).Methods("POST")
+	r.HandleFunc("/api/logout", logoutHandler).Methods("POST")
 
 	fmt.Println("Server started on :8080")
 	http.ListenAndServe(":8080", r)

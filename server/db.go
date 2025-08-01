@@ -24,6 +24,20 @@ func initDB() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	createTokensTable := `
+    CREATE TABLE IF NOT EXISTS jwt_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        jti TEXT NOT NULL UNIQUE,
+        username TEXT NOT NULL,
+        issued_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    );`
+	_, err = db.Exec(createTokensTable)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
 
 func CreateUser(username, hashedPassword, totpSecret string) (*User, error) {
@@ -53,4 +67,34 @@ func GetUserByUsername(username string) (*User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+func AddTokenJTI(jti, username string, issuedAt, expiresAt int64) error {
+	_, err := db.Exec(
+		"INSERT INTO jwt_tokens (jti, username, issued_at, expires_at) VALUES (?, ?, ?, ?)",
+		jti, username, issuedAt, expiresAt,
+	)
+	return err
+}
+
+func IsJTIValid(jti string) (bool, error) {
+	var count int
+	err := db.QueryRow(
+		"SELECT COUNT(*) FROM jwt_tokens WHERE jti=? AND expires_at > strftime('%s','now')",
+		jti,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func RemoveExpiredJTIs() error {
+	_, err := db.Exec("DELETE FROM jwt_tokens WHERE expires_at <= strftime('%s','now')")
+	return err
+}
+
+func DeleteTokenJTI(jti string) error {
+	_, err := db.Exec("DELETE FROM jwt_tokens WHERE jti = ?", jti)
+	return err
 }

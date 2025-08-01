@@ -97,16 +97,29 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate JWT
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	now := time.Now().Unix()
+	exp := now + int64((time.Hour * 24 * 30).Seconds()) // 30 days
+
+	jti := uuid.NewString()
+	claims := jwt.MapClaims{
 		"username": user.Username,
-		"exp":      time.Now().Add((time.Hour * 24) * 30).Unix(), // One month by default, might want to make this configurable later
-	})
+		"iat":      now,
+		"nbf":      now,
+		"exp":      exp,
+		"jti":      jti,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
+	// Save the token ID
+	if err := AddTokenJTI(jti, user.Username, now, exp); err != nil {
+		http.Error(w, "Failed to persist token", http.StatusInternalServerError)
+		return
+	}
 	resp := LoginResponse{Token: tokenString}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -133,14 +146,35 @@ func messageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check JWT claims
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		http.Error(w, "Invalid token claims", http.StatusUnauthorized)
 		return
 	}
+
+	// Check username
 	username, ok := claims["username"].(string)
 	if !ok || username == "" {
 		http.Error(w, "Username not found in token", http.StatusUnauthorized)
+		return
+	}
+
+	// Check JWT ID
+	jti, ok := claims["jti"].(string)
+	if !ok || jti == "" {
+		http.Error(w, "JTI not found in token", http.StatusUnauthorized)
+		return
+	}
+
+	valid, err := IsJTIValid(jti)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if !valid {
+		http.Error(w, "Token has been revoked or expired", http.StatusUnauthorized)
 		return
 	}
 
@@ -197,5 +231,49 @@ func messageHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(SendReceipt{
 		Receipt: receipt,
 		SentTo:  sentTo,
+	})
+}
+
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		http.Error(w, "Missing or invalid Authorization header", http.StatusUnauthorized)
+		return
+	}
+	tokenString := authHeader[7:]
+
+	// Parse the token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
+		return jwtSecret, nil
+	})
+	if err != nil || !token.Valid {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+		return
+	}
+
+	jti, ok := claims["jti"].(string)
+	if !ok || jti == "" {
+		http.Error(w, "JTI not found in token", http.StatusUnauthorized)
+		return
+	}
+
+	err = DeleteTokenJTI(jti)
+	if err != nil {
+		http.Error(w, "Failed to revoke token", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(JustOneMessage{
+		Message: "Logged out",
 	})
 }
