@@ -165,8 +165,8 @@ func main() {
 
 // Helper to return the main app content (your navigation etc.)
 func mainAppContent(w fyne.Window) fyne.CanvasObject {
-	content := container.NewStack(views.ContactsUI(w))
-	var btnDecryptor, btnEncryptor, btnChat, btnSettings, btnContacts *widget.Button
+	content := container.NewStack()
+	var btnDecryptor, btnEncryptor, btnChat, btnSettings, btnContacts, btnAccount *widget.Button
 	var navButtons *fyne.Container
 
 	setActive := func(active string) {
@@ -175,6 +175,7 @@ func mainAppContent(w fyne.Window) fyne.CanvasObject {
 		btnChat.Importance = widget.MediumImportance
 		btnSettings.Importance = widget.MediumImportance
 		btnContacts.Importance = widget.MediumImportance
+		btnAccount.Importance = widget.MediumImportance
 
 		switch active {
 		case "decryptor":
@@ -192,6 +193,9 @@ func mainAppContent(w fyne.Window) fyne.CanvasObject {
 		case "settings":
 			btnSettings.Importance = widget.HighImportance
 			content.Objects = []fyne.CanvasObject{views.SettingsUI(w)}
+		case "account":
+			btnAccount.Importance = widget.HighImportance
+			content.Objects = []fyne.CanvasObject{views.AccountUI(w)}
 		}
 		content.Refresh()
 		navButtons.Refresh()
@@ -199,15 +203,18 @@ func mainAppContent(w fyne.Window) fyne.CanvasObject {
 
 	btnDecryptor = widget.NewButtonWithIcon("Decrypt", theme.VisibilityIcon(), func() { setActive("decryptor") })
 	btnEncryptor = widget.NewButtonWithIcon("Encrypt", theme.VisibilityOffIcon(), func() { setActive("encryptor") })
-	btnContacts = widget.NewButtonWithIcon("Contacts", theme.AccountIcon(), func() { setActive("contacts") })
+	btnContacts = widget.NewButtonWithIcon("Contacts", theme.FolderIcon(), func() { setActive("contacts") })
 	btnSettings = widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), func() { setActive("settings") })
 	btnChat = widget.NewButtonWithIcon("Chat", theme.MailSendIcon(), func() { setActive("chat") })
+	btnAccount = widget.NewButtonWithIcon("Account", theme.AccountIcon(), func() { setActive("account") })
 
 	navButtons = container.NewVBox(
+		utils.MakeHeaderLabel("SebsChat"),
 		btnEncryptor,
 		btnDecryptor,
 		btnChat,
 		btnContacts,
+		btnAccount,
 		btnSettings,
 		layout.NewSpacer(),
 	)
@@ -217,6 +224,8 @@ func mainAppContent(w fyne.Window) fyne.CanvasObject {
 
 	split := container.NewHSplit(navContainer, content)
 	split.Offset = 0.2
+
+	setActive("encryptor")
 
 	return split
 }

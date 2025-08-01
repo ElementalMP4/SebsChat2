@@ -18,7 +18,10 @@ import (
 func ContactsUI(win fyne.Window) fyne.CanvasObject {
 	var content *fyne.Container = container.NewVBox()
 	showContactList(content, win)
-	return content
+	return container.NewVBox(
+		utils.MakeHeaderLabel("Contacts"),
+		content,
+	)
 }
 
 func showContactList(content *fyne.Container, win fyne.Window) {

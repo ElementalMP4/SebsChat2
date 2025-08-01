@@ -130,6 +130,7 @@ func MessageEncryptorUI(win fyne.Window) fyne.CanvasObject {
 	}
 
 	return container.NewVBox(
+		utils.MakeHeaderLabel("Encrypt a message"),
 		widget.NewLabel("Recipients:"),
 		recipientsButton,
 		widget.NewSeparator(),

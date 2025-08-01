@@ -13,7 +13,7 @@ import (
 )
 
 func SettingsUI(win fyne.Window) fyne.CanvasObject {
-	user := globals.SelfUser // assuming globals.SelfUser exists
+	user := globals.SelfUser
 
 	// User fields
 	nameEntry := widget.NewEntry()
@@ -38,7 +38,41 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 	useTlsCheck := widget.NewCheck("Use TLS", func(b bool) {})
 	useTlsCheck.SetChecked(user.Server.UseTls)
 
-	saveBtn := widget.NewButton("Save", func() {
+	// Store original values for change detection
+	original := struct {
+		Name, PublicKey, PrivateKey, SigningPublicKey, SigningPrivateKey, Address string
+		UseTls                                                                    bool
+	}{
+		Name:              user.Name,
+		PublicKey:         user.PublicKey,
+		PrivateKey:        user.PrivateKey,
+		SigningPublicKey:  user.SigningPublicKey,
+		SigningPrivateKey: user.SigningPrivateKey,
+		Address:           user.Server.Address,
+		UseTls:            user.Server.UseTls,
+	}
+
+	// Helper to check if any field has changed
+	isChanged := func() bool {
+		return nameEntry.Text != original.Name ||
+			publicKeyEntry.Text != original.PublicKey ||
+			privateKeyEntry.Text != original.PrivateKey ||
+			signingPublicKeyEntry.Text != original.SigningPublicKey ||
+			signingPrivateKeyEntry.Text != original.SigningPrivateKey ||
+			addressEntry.Text != original.Address ||
+			useTlsCheck.Checked != original.UseTls
+	}
+
+	// Function to update save button state
+	var saveBtn *widget.Button
+	updateSaveBtn := func() {
+		saveBtn.Disable()
+		if isChanged() {
+			saveBtn.Enable()
+		}
+	}
+
+	saveBtn = widget.NewButton("Save", func() {
 		globals.SelfUser = types.SelfUser{
 			Name:              nameEntry.Text,
 			PublicKey:         publicKeyEntry.Text,
@@ -55,8 +89,29 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 			dialog.ShowError(fmt.Errorf("failed to save settings: %v", err), win)
 			return
 		}
-		dialog.ShowInformation("Settings", "Settings saved successfully.", win)
+
+		// Update original values after save
+		original.Name = nameEntry.Text
+		original.PublicKey = publicKeyEntry.Text
+		original.PrivateKey = privateKeyEntry.Text
+		original.SigningPublicKey = signingPublicKeyEntry.Text
+		original.SigningPrivateKey = signingPrivateKeyEntry.Text
+		original.Address = addressEntry.Text
+		original.UseTls = useTlsCheck.Checked
+
+		updateSaveBtn()
 	})
+	saveBtn.Importance = widget.HighImportance
+	updateSaveBtn() // Initial state
+
+	// Attach listeners to all fields
+	nameEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	publicKeyEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	privateKeyEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	signingPublicKeyEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	signingPrivateKeyEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	addressEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	useTlsCheck.OnChanged = func(_ bool) { updateSaveBtn() }
 
 	form := &widget.Form{
 		Items: []*widget.FormItem{
@@ -70,8 +125,13 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 		},
 	}
 
+	// Set buttons to stretch
+	saveBtn.Alignment = widget.ButtonAlignCenter
+
+	saveBtn.Importance = widget.HighImportance
+
 	return container.NewVBox(
-		widget.NewLabelWithStyle("Settings", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		utils.MakeHeaderLabel("Settings"),
 		form,
 		saveBtn,
 	)

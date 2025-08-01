@@ -9,6 +9,11 @@ import (
 	"os"
 	"sebschat/globals"
 	"sebschat/types"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 )
 
 func Base64ToBytes(input string) ([]byte, error) {
@@ -143,4 +148,19 @@ func ContactToJson() ([]byte, error) {
 		return []byte{}, fmt.Errorf("failed to marshal key exchange: %v", err)
 	}
 	return data, nil
+}
+
+func MakeHeaderLabel(label string) fyne.CanvasObject {
+	text := canvas.NewText(label, theme.Color(theme.ColorNameForeground))
+	text.Alignment = fyne.TextAlignCenter
+	text.TextStyle = fyne.TextStyle{Bold: true}
+	text.TextSize = 28
+
+	separator := canvas.NewLine(theme.Color(theme.ColorNameSeparator))
+	separator.StrokeWidth = 2
+
+	return container.NewVBox(
+		container.NewCenter(text),
+		separator,
+	)
 }

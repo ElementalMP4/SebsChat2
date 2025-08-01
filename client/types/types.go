@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 type Contacts struct {
 	Contacts []Contact `json:"contacts"`
 }
@@ -21,6 +23,7 @@ type SelfUser struct {
 type Server struct {
 	Address string `json:"address"`
 	UseTls  bool   `json:"useTls"`
+	Token   string `json:"token"`
 }
 
 type MessageObject struct {
@@ -63,4 +66,31 @@ type DecryptedMessage struct {
 type KeyExchange struct {
 	KeyFrom string `json:"keyFrom"`
 	Key     string `json:"key"`
+}
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	TOTPCode string `json:"totpCode"`
+}
+
+type RegisterRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type RegisterResponse struct {
+	TOTPSecret string `json:"totpSecret"`
+}
+
+type LoginResponse struct {
+	Token string `json:"token"`
+}
+
+func (server Server) GetApiAddress() string {
+	protocol := "http"
+	if server.UseTls {
+		protocol += "s"
+	}
+	return fmt.Sprintf("%s://%s", protocol, server.Address)
 }

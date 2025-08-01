@@ -6,6 +6,7 @@ import (
 	"io"
 	"sebschat/cryptography"
 	"sebschat/types"
+	"sebschat/utils"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -51,7 +52,7 @@ func MessageDecryptorUI(win fyne.Window) fyne.CanvasObject {
 		fd.Show()
 	})
 
-	return container.NewVBox(openButton, output)
+	return container.NewVBox(utils.MakeHeaderLabel("Decrypt a message"), openButton, output)
 }
 
 func decryptToString(data []byte) (string, error) {
