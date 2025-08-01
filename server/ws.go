@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 
@@ -59,18 +60,22 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("WebSocket upgrade error:", err)
 		return
 	}
+
 	defer func() {
 		// Remove user from map on disconnect
 		conn.Close()
 		sessionsMu.Lock()
 		delete(userSessions, username)
 		sessionsMu.Unlock()
+		log.Printf("User %s has disconnected\n", username)
 	}()
 
 	// Add user to map
 	sessionsMu.Lock()
 	userSessions[username] = conn
 	sessionsMu.Unlock()
+
+	log.Printf("User %s has connected\n", username)
 
 	// Send OK message
 	msg := WebSocketMessage{

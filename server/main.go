@@ -55,5 +55,5 @@ func main() {
 	r.HandleFunc("/api/logout", logoutHandler).Methods("POST")
 
 	fmt.Println("Server started on :8080")
-	http.ListenAndServe(":8080", r)
+	http.ListenAndServe(":8080", LoggingMiddleware(r))
 }
