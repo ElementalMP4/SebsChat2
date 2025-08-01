@@ -94,3 +94,11 @@ func (server Server) GetApiAddress() string {
 	}
 	return fmt.Sprintf("%s://%s", protocol, server.Address)
 }
+
+func (server Server) GetGatewayAddress() string {
+	protocol := "ws"
+	if server.UseTls {
+		protocol += "s"
+	}
+	return fmt.Sprintf("%s://%s", protocol, server.Address)
+}
