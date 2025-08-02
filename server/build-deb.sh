@@ -61,14 +61,20 @@ cat > "$PKG_ROOT/DEBIAN/postinst" <<'EOF'
 #!/bin/bash
 set -e
 
+# Create system user if needed
 if ! id sebschat &>/dev/null; then
     useradd --system --no-create-home --shell /usr/sbin/nologin sebschat
 fi
 
+# Ensure ownership of the install directory
+chown -R sebschat:sebschat /opt/sebschat
+
+# Reload and start the service
 systemctl daemon-reload
 systemctl enable sebschat.service
 systemctl restart sebschat.service
 EOF
+
 chmod 755 "$PKG_ROOT/DEBIAN/postinst"
 
 # Post-removal
