@@ -82,6 +82,7 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 			Server: types.Server{
 				Address: addressEntry.Text,
 				UseTls:  useTlsCheck.Checked,
+				Token:   globals.SelfUser.Server.Token,
 			},
 		}
 

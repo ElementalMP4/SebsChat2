@@ -102,13 +102,24 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 					continue
 				}
 
+				if globals.SelfUser.Server.Token == "" {
+					dialog.ShowError(fmt.Errorf("you are not logged in! Head to account first to authenticate with the server"), win)
+					return
+				}
+
 				headers := http.Header{}
 				headers.Set("Sec-WebSocket-Protocol", "Bearer "+globals.SelfUser.Server.Token)
 
 				log.Println("Connecting to", u.String())
-				c, _, err := websocket.DefaultDialer.Dial(u.String(), headers)
+				c, r, err := websocket.DefaultDialer.Dial(u.String(), headers)
+
+				if r.StatusCode == 401 {
+					dialog.ShowError(fmt.Errorf("your login token has expired or is invalid. Head to account to re-authenticate with the server"), win)
+					return
+				}
+
 				if err != nil {
-					log.Println("WebSocket dial failed:", err)
+					log.Printf("WebSocket dial failed: %v", err)
 					time.Sleep(3 * time.Second)
 					continue
 				}
