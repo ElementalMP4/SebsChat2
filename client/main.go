@@ -28,27 +28,35 @@ func main() {
 	w := a.NewWindow("SebsChat")
 	w.Resize(fyne.NewSize(900, 700))
 
+	// Get config path from environment variable or default
+	configPath := os.Getenv("SC_CONFIG")
+	if configPath == "" {
+		configPath = "./config.json"
+	}
+
 	// Check if config file exists
-	if _, err := os.Stat("./config.json"); os.IsNotExist(err) {
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		globals.Config = types.Config{
 			UserFilePath:     "./profile.json",
 			ContactsFilePath: "./contacts.json",
 		}
 	} else {
 		// Load config
-		file, err := os.Open("./config.json")
+		file, err := os.Open(configPath)
 		if err != nil {
 			dialog.ShowError(fmt.Errorf("error opening config file: %v", err), w)
 			w.ShowAndRun()
 			return
 		}
 		defer file.Close()
+
 		byteValue, err := io.ReadAll(file)
 		if err != nil {
 			dialog.ShowError(fmt.Errorf("error reading config file: %v", err), w)
 			w.ShowAndRun()
 			return
 		}
+
 		err = json.Unmarshal(byteValue, &globals.Config)
 		if err != nil {
 			dialog.ShowError(fmt.Errorf("error unmarshalling config: %v", err), w)
