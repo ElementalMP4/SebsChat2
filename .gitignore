@@ -5,3 +5,5 @@ sebschat
 *.app
 *.db
 *.jwt
+*.imp
+*.enc

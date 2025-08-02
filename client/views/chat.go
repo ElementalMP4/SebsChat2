@@ -20,8 +20,15 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-
 	"github.com/gorilla/websocket"
+)
+
+var (
+	wsConn              *websocket.Conn
+	connMutex           sync.Mutex
+	stopReconnect       chan struct{}
+	conversationTargets []string
+	historyContainer    types.ChatHistoryContainer
 )
 
 // Helper function to create a message bubble with bold username and left padding
@@ -61,20 +68,24 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 	history := container.NewVBox()
 	historyScroll := container.NewVScroll(history)
 
+	historyContainer = types.ChatHistoryContainer{
+		History:       history,
+		HistoryScroll: historyScroll,
+	}
+
 	messageEntry := widget.NewEntry()
 	messageEntry.SetPlaceHolder("Select a contact to start chatting...")
 	messageEntry.Disable()
 
-	var (
-		wsConn              *websocket.Conn
-		connMutex           sync.Mutex // to safely access wsConn
-		conversationTargets []string
-
-		stopReconnect chan struct{}
-	)
-
-	// Connect and listen with gorilla websocket, auto-reconnect on drop
 	connectWebSocket := func() {
+		connMutex.Lock()
+		if wsConn != nil {
+			connMutex.Unlock()
+			log.Println("WebSocket is already connected; skipping reconnect")
+			return
+		}
+		connMutex.Unlock()
+
 		go func() {
 			for {
 				select {
@@ -91,7 +102,6 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 					continue
 				}
 
-				// Prepare headers with Sec-WebSocket-Protocol
 				headers := http.Header{}
 				headers.Set("Sec-WebSocket-Protocol", "Bearer "+globals.SelfUser.Server.Token)
 
@@ -109,7 +119,6 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 
 				log.Println("WebSocket connected")
 
-				// Read loop
 				for {
 					var msg types.WebSocketMessageContainer
 					err := c.ReadJSON(&msg)
@@ -137,13 +146,13 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 
 						for _, object := range decrypted.Objects {
 							if object.Type == "text" {
-								history.Add(messageBubble(decrypted.Author, *object.Content))
+								historyContainer.History.Add(messageBubble(decrypted.Author, *object.Content))
 							}
 						}
 					}
 				}
 
-				// Cleanup on disconnect
+				// Handle disconnect
 				connMutex.Lock()
 				if wsConn != nil {
 					wsConn.Close()
@@ -168,10 +177,6 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 
 		connMutex.Lock()
 		defer connMutex.Unlock()
-		if wsConn == nil {
-			log.Println("WebSocket is not connected")
-			return
-		}
 
 		inputMessage := types.InputMessage{
 			Recipients: conversationTargets,
@@ -195,13 +200,13 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 			return
 		}
 
-		history.Add(messageBubble("You", text))
+		historyContainer.History.Add(messageBubble("You", text))
 		messageEntry.SetText("")
-		historyScroll.ScrollToBottom()
+		historyContainer.HistoryScroll.ScrollToBottom()
 	}
 
 	bottomBar := container.NewBorder(nil, nil, nil, nil, messageEntry)
-	chatArea := container.NewBorder(nil, bottomBar, nil, nil, historyScroll)
+	chatArea := container.NewBorder(nil, bottomBar, nil, nil, historyContainer.HistoryScroll)
 
 	var selectedBtn *widget.Button
 	contactButtons := make([]fyne.CanvasObject, len(contacts))
@@ -224,9 +229,9 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 			messageEntry.SetPlaceHolder("Type a message...")
 
 			// Reset chat history
-			history.Objects = nil
-			history.Refresh()
-			historyScroll.ScrollToBottom()
+			historyContainer.History.Objects = nil
+			historyContainer.History.Refresh()
+			historyContainer.HistoryScroll.ScrollToBottom()
 
 			// Set current target
 			conversationTargets = []string{contactName}

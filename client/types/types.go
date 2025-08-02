@@ -3,6 +3,9 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 )
 
 type Contacts struct {
@@ -93,6 +96,11 @@ type LoginResponse struct {
 type WebSocketMessageContainer struct {
 	Type    string          `json:"type"`
 	Payload json.RawMessage `json:"payload"`
+}
+
+type ChatHistoryContainer struct {
+	History       *fyne.Container
+	HistoryScroll *container.Scroll
 }
 
 func (server Server) GetApiAddress() string {
