@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,6 +20,11 @@ var (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+func hashUsername(s string) string {
+	hash := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(hash[:])
 }
 
 func gatewayHandler(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +59,8 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hashedUsername := hashUsername(username)
+
 	// Echo back the Sec-WebSocket-Protocol header
 	upgrader.Subprotocols = []string{authHeader}
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -64,17 +73,17 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 		// Remove user from map on disconnect
 		conn.Close()
 		sessionsMu.Lock()
-		delete(userSessions, username)
+		delete(userSessions, hashedUsername)
 		sessionsMu.Unlock()
-		LogWarn(fmt.Sprintf("User %s has disconnected", username))
+		LogWarn(fmt.Sprintf("User %s has disconnected", hashedUsername))
 	}()
 
 	// Add user to map
 	sessionsMu.Lock()
-	userSessions[username] = conn
+	userSessions[hashedUsername] = conn
 	sessionsMu.Unlock()
 
-	LogSuccess(fmt.Sprintf("User %s has connected", username))
+	LogSuccess(fmt.Sprintf("User %s has connected", hashedUsername))
 
 	// Send OK message
 	msg := WebSocketMessage{

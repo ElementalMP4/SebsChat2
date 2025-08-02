@@ -184,7 +184,7 @@ func messageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if msg.Sender != username {
+	if msg.Sender != hashUsername(username) {
 		http.Error(w, "Sender does not match token", http.StatusUnauthorized)
 		return
 	}
