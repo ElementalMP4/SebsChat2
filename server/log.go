@@ -2,13 +2,18 @@ package main
 
 import (
 	"bufio"
+	"embed"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 )
+
+//go:embed static/*.*
+var staticFS embed.FS
 
 const (
 	colorReset  = "\033[0m"
@@ -22,6 +27,47 @@ const (
 	colorMagenta = "\033[35m"
 	colorRed     = "\033[31m"
 )
+
+func ShowTheBanner() {
+	data, err := staticFS.ReadFile("static/banner.txt")
+	if err != nil {
+		LogFatalError(err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	printGradientBanner(lines)
+}
+
+func printGradientBanner(lines []string) {
+	total := 0
+	for _, line := range lines {
+		total += len(line)
+	}
+
+	index := 0
+	for _, line := range lines {
+		for _, char := range line {
+			r, g := gradientColor(index, total)
+			fmt.Printf("\033[38;2;%d;%d;0m%c", r, g, char)
+			index++
+		}
+		fmt.Println()
+	}
+	fmt.Print("\033[0m")
+}
+
+func gradientColor(position, max int) (int, int) {
+	if max == 0 {
+		return 255, 0
+	}
+
+	r := 255
+	g := int(float64(position) / float64(max) * 165)
+	if g > 165 {
+		g = 165
+	}
+	return r, g
+}
 
 type loggingResponseWriter struct {
 	http.ResponseWriter
@@ -90,14 +136,50 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		duration := time.Since(start)
 
 		ip := colorCyan + r.RemoteAddr + colorReset
-		timestamp := colorGrey + start.Format("02/Jan/2006:15:04:05 -0700") + colorReset
 		method := r.Method
 		path := colorYellow + r.URL.RequestURI() + colorReset
 		proto := r.Proto
 		status := colorStatus(lrw.statusCode)
 		size := colorWhite + strconv.Itoa(lrw.size) + colorReset
 
-		log.Printf(`%s - - [%s] "%s %s %s" %s %s (%v)`,
-			ip, timestamp, method, path, proto, status, size, duration)
+		LogInfo(fmt.Sprintf(`%s - "%s %s %s" %s %s (%v)`,
+			ip, method, path, proto, status, size, duration))
 	})
+}
+
+func logStyled(message string, color string) {
+	timestamp := time.Now().Format("2006/01/02 15:04:05")
+	fmt.Printf("%s%s%s %s%s%s\n", colorGrey, timestamp, colorReset, color, message, colorReset)
+}
+
+func LogInfo(msg string)    { logStyled(msg, colorCyan) }
+func LogWarn(msg string)    { logStyled(msg, colorYellow) }
+func LogError(msg string)   { logStyled(msg, colorRed) }
+func LogSuccess(msg string) { logStyled(msg, colorGreen) }
+
+func LogFatal(msg string) {
+	logStyled(msg, colorRed)
+	os.Exit(1)
+}
+
+func LogFatalError(err error) {
+	logStyled(fmt.Sprintf("%v", err), colorRed)
+	os.Exit(1)
+}
+
+func LogTask(taskName string, taskFunc func() error) {
+	start := time.Now()
+
+	timestamp := time.Now().Format("2006/01/02 15:04:05")
+	fmt.Printf("%s%s %s%-50s%s", colorGrey, timestamp, colorCyan, taskName+"...", colorReset)
+
+	err := taskFunc()
+	elapsed := time.Since(start)
+
+	if err != nil {
+		fmt.Printf("[%sFAIL%s] %s(%v)%s\n", colorRed, colorReset, colorGrey, elapsed, colorReset)
+		LogFatal(fmt.Sprintf("↳ Error: %v", err))
+	} else {
+		fmt.Printf("[ %sOK%s ] %s(%v)%s\n", colorGreen, colorReset, colorGrey, elapsed, colorReset)
+	}
 }

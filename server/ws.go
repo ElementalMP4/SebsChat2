@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 
@@ -67,7 +66,7 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 		sessionsMu.Lock()
 		delete(userSessions, username)
 		sessionsMu.Unlock()
-		log.Printf("User %s has disconnected\n", username)
+		LogWarn(fmt.Sprintf("User %s has disconnected", username))
 	}()
 
 	// Add user to map
@@ -75,7 +74,7 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 	userSessions[username] = conn
 	sessionsMu.Unlock()
 
-	log.Printf("User %s has connected\n", username)
+	LogSuccess(fmt.Sprintf("User %s has connected", username))
 
 	// Send OK message
 	msg := WebSocketMessage{

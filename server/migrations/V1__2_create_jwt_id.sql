@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS jwt_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    jti TEXT NOT NULL UNIQUE,
+    username TEXT NOT NULL,
+    issued_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);

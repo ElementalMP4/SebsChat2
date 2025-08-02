@@ -2,42 +2,67 @@ package main
 
 import (
 	"database/sql"
-	"log"
+	"embed"
+	"fmt"
+	"io/fs"
+	"sort"
+	"strings"
 )
+
+//go:embed migrations/*.sql
+var migrationFS embed.FS
 
 var db *sql.DB
 
-func initDB() {
+func getSortedMigrationFiles() ([]string, error) {
+	entries, err := fs.ReadDir(migrationFS, "migrations")
+	if err != nil {
+		return nil, err
+	}
+
+	var files []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
+			files = append(files, entry.Name())
+		}
+	}
+
+	sort.Strings(files)
+	return files, nil
+}
+
+func applyMigration(filename string) error {
+	content, err := migrationFS.ReadFile("migrations/" + filename)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(string(content))
+	return err
+}
+
+func runMigrations() error {
+	files, err := getSortedMigrationFiles()
+	if err != nil {
+		return fmt.Errorf("reading migrations: %w", err)
+	}
+
+	for _, file := range files {
+		f := file
+		LogTask("Apply migration "+f, func() error {
+			return applyMigration(f)
+		})
+	}
+	return nil
+}
+
+func initDB() error {
 	var err error
 	db, err = sql.Open("sqlite3", "./data.db")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	createTable := `
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT NOT NULL UNIQUE,
-        hashed_password TEXT NOT NULL,
-        totp_secret TEXT NOT NULL
-    );`
-	_, err = db.Exec(createTable)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	createTokensTable := `
-    CREATE TABLE IF NOT EXISTS jwt_tokens (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        jti TEXT NOT NULL UNIQUE,
-        username TEXT NOT NULL,
-        issued_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL
-    );`
-	_, err = db.Exec(createTokensTable)
-	if err != nil {
-		log.Fatal(err)
-	}
-
+	return nil
 }
 
 func CreateUser(username, hashedPassword, totpSecret string) (*User, error) {

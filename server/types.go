@@ -1,9 +1,20 @@
 package main
 
+import "fmt"
+
 var (
 	WS_CONNECT_OK   string = "CONNECT_OK"
 	WS_CHAT_MESSAGE string = "CHAT_MESSAGE"
 )
+
+type Config struct {
+	Port string
+	Bind string
+}
+
+func (config Config) GetBindAddress() string {
+	return fmt.Sprintf("%s:%s", config.Bind, config.Port)
+}
 
 type User struct {
 	ID             int
