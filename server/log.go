@@ -140,7 +140,12 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(lrw, r)
 		duration := time.Since(start)
 
-		ip := colorCyan + r.RemoteAddr + colorReset
+		ip := r.Header.Get("X-Real-IP")
+		if ip == "" {
+			ip = r.RemoteAddr
+		}
+		ip = colorCyan + ip + colorReset
+
 		method := r.Method
 		path := colorYellow + r.URL.RequestURI() + colorReset
 		proto := r.Proto
