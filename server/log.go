@@ -62,9 +62,9 @@ func gradientColor(position, max int) (int, int) {
 	}
 
 	r := 255
-	g := int(float64(position) / float64(max) * 165)
-	if g > 165 {
-		g = 165
+	g := int(float64(position) / float64(max) * 230)
+	if g > 230 {
+		g = 230
 	}
 	return r, g
 }
