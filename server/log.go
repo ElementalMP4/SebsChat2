@@ -130,6 +130,11 @@ func colorStatus(code int) string {
 
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Upgrade") == "websocket" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		start := time.Now()
 		lrw := &loggingResponseWriter{ResponseWriter: w}
 		next.ServeHTTP(lrw, r)
