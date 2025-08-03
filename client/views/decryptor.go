@@ -2,7 +2,6 @@ package views
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"sebschat/cryptography"
 	"sebschat/types"
@@ -16,8 +15,9 @@ import (
 )
 
 func MessageDecryptorUI(win fyne.Window) fyne.CanvasObject {
-	output := widget.NewLabel("Decrypted content will appear here...")
-	output.Wrapping = fyne.TextWrapWord // Wrap long lines nicely
+	history := container.NewVBox()
+	historyScroll := container.NewVScroll(history)
+	historyScroll.SetMinSize(fyne.NewSize(0, 200))
 
 	openButton := widget.NewButton("Open .enc File", func() {
 		fd := dialog.NewFileOpen(
@@ -27,50 +27,66 @@ func MessageDecryptorUI(win fyne.Window) fyne.CanvasObject {
 					return
 				}
 				if r == nil {
-					return // user canceled
+					return
 				}
 				defer r.Close()
 
-				// Read file
 				data, err := io.ReadAll(r)
 				if err != nil {
 					dialog.ShowError(err, win)
 					return
 				}
 
-				decrypted, err := decryptToString(data)
+				err = decryptMessages(data, history, historyScroll)
 				if err != nil {
 					dialog.ShowError(err, win)
 					return
 				}
-				output.SetText(decrypted)
 			}, win)
 
-		fd.SetFilter(
-			storage.NewExtensionFileFilter([]string{".enc"}),
-		)
+		fd.SetFilter(storage.NewExtensionFileFilter([]string{".enc"}))
 		fd.Show()
 	})
 
-	return container.NewVBox(utils.MakeHeaderLabel("Decrypt a message"), openButton, output)
+	header := utils.MakeHeaderLabel("Decrypt a message")
+
+	return container.NewBorder(
+		container.NewVBox(header, openButton),
+		nil, nil, nil,
+		historyScroll,
+	)
 }
 
-func decryptToString(data []byte) (string, error) {
-	var result types.EncryptedMessage
-	var output string
-	if err := json.Unmarshal(data, &result); err != nil {
-		return "", fmt.Errorf("failed to unmarshal JSON: %w", err)
-	}
-	decrypted, err := cryptography.Decrypt(result, true)
+func decryptMessages(data []byte, history *fyne.Container, historyScroll *container.Scroll) error {
+	var encryptedMessage types.EncryptedMessage
+	err := json.Unmarshal(data, &encryptedMessage)
 	if err != nil {
-		return "", err
+		return err
 	}
 
+	decrypted, err := cryptography.Decrypt(encryptedMessage, true)
+	if err != nil {
+		return err
+	}
+
+	messagesToDisplay := []string{}
+	author := decrypted.Author
+	favouriteColour := "#FFFFFF"
+
 	for _, object := range decrypted.Objects {
-		if object.Type == "text" {
-			output += fmt.Sprintf("%s: %s\n", decrypted.Author, object.Content["text"])
+
+		switch object.Type {
+		case "text":
+			messagesToDisplay = append(messagesToDisplay, object.Content["text"])
+		case "metadata":
+			favouriteColour = object.Content["favouriteColour"]
 		}
 	}
 
-	return output, nil
+	for _, message := range messagesToDisplay {
+		history.Add(messageBubble(author, favouriteColour, message))
+		historyScroll.ScrollToBottom()
+	}
+
+	return nil
 }

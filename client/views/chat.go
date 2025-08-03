@@ -178,6 +178,7 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 
 						for _, message := range messagesToDisplay {
 							historyContainer.History.Add(messageBubble(author, favouriteColour, message))
+							historyContainer.HistoryScroll.ScrollToBottom()
 						}
 					}
 				}

@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"sebschat/cryptography"
+	"sebschat/globals"
 	"sebschat/types"
 	"sebschat/utils"
 
@@ -143,7 +144,14 @@ func MessageEncryptorUI(win fyne.Window) fyne.CanvasObject {
 
 func encryptMessages(recipients []string, messages []string) (types.EncryptedMessage, error) {
 	var objects []types.MessageObject
+	metadataMap := map[string]string{
+		"favouriteColour": globals.SelfUser.FavouriteColour,
+	}
 
+	objects = append(objects, types.MessageObject{
+		Type:    "metadata",
+		Content: metadataMap,
+	})
 	for _, message := range messages {
 		contentMap := map[string]string{
 			"text": message,
