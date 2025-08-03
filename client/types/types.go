@@ -47,6 +47,7 @@ type EncryptedMessageObject struct {
 
 type EncryptedMessage struct {
 	Objects          []EncryptedMessageObject `json:"objects"`
+	KeySignatures    map[string]string        `json:"keySignatures"`
 	EncryptedKeys    map[string]string        `json:"encryptedKeys"`
 	SigningPublicKey string                   `json:"signingPublicKey"`
 	Sender           string                   `json:"sender"`

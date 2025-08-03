@@ -129,6 +129,8 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 	}
 
 	encryptedKeys := make(map[string]string)
+	keySignatures := make(map[string]string)
+
 	for _, user := range inputMessage.Recipients {
 		pub, err := utils.GetContactPublicKey(user)
 		if err != nil {
@@ -148,7 +150,21 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 		if hashNames {
 			userNameOrHash = utils.HashString(user)
 		}
+
+		signingPriv, err := utils.GetSelfSigningPrivateKey()
+		if err != nil {
+			return types.EncryptedMessage{}, err
+		}
+
+		keyPayload := append([]byte(userNameOrHash), encNonce...)
+		keyPayload = append(keyPayload, encKey...)
+		sig, err := signMessage(keyPayload, signingPriv)
+		if err != nil {
+			return types.EncryptedMessage{}, fmt.Errorf("error signing key payload: %v", err)
+		}
+
 		encryptedKeys[userNameOrHash] = base64.StdEncoding.EncodeToString(append(encNonce, encKey...))
+		keySignatures[userNameOrHash] = base64.StdEncoding.EncodeToString(sig)
 	}
 
 	signingPub, err := utils.GetSelfSigningPublicKey()
@@ -164,6 +180,7 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 	outputMsg := types.EncryptedMessage{
 		Objects:          messageObjects,
 		EncryptedKeys:    encryptedKeys,
+		KeySignatures:    keySignatures,
 		SigningPublicKey: base64.StdEncoding.EncodeToString(signingPub),
 		Sender:           senderNameOrHash,
 	}
@@ -217,6 +234,24 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 	}
 	encNonce := encKeyFull[:chacha20poly1305.NonceSizeX]
 	encKey := encKeyFull[chacha20poly1305.NonceSizeX:]
+
+	sig := msg.KeySignatures[selfUsernameOrHash]
+	decodedSig, err := base64.StdEncoding.DecodeString(sig)
+	if err != nil {
+		return types.DecryptedMessage{}, fmt.Errorf("error decoding key signature: %v", err)
+	}
+
+	keyPayload := append([]byte(selfUsernameOrHash), encNonce...)
+	keyPayload = append(keyPayload, encKey...)
+
+	signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
+	if err != nil {
+		return types.DecryptedMessage{}, fmt.Errorf("error decoding signing key: %v", err)
+	}
+
+	if !ed25519.Verify(signingPub, keyPayload, decodedSig) {
+		return types.DecryptedMessage{}, fmt.Errorf("symmetric key signature verification failed")
+	}
 
 	symKey, err := decryptSymmetric(encKey, sharedKey, encNonce)
 	if err != nil {
