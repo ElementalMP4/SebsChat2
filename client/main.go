@@ -97,6 +97,7 @@ func main() {
 				PrivateKey:        utils.BytesToBase64(priv),
 				SigningPublicKey:  utils.BytesToBase64(pubSign),
 				SigningPrivateKey: utils.BytesToBase64(privSign),
+				FavouriteColour:   "#FFFFFF",
 			}
 
 			globals.SelfUser = selfUser
