@@ -42,7 +42,7 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 			return types.EncryptedMessage{}, fmt.Errorf("object content cannot be empty")
 		}
 		switch object.Type {
-		case "text":
+		case "text", "metadata":
 			{
 				contentMapBytes, err := json.Marshal(object.Content)
 				if err != nil {

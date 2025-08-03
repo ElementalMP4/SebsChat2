@@ -32,8 +32,16 @@ var (
 )
 
 // Helper function to create a message bubble with bold username and left padding
-func messageBubble(username, message string) fyne.CanvasObject {
-	usernameLabel := canvas.NewText(username, theme.Color(theme.ColorNameForeground))
+func messageBubble(username, favouriteColour, message string) fyne.CanvasObject {
+	// Default to theme foreground in case of parsing failure
+	col := theme.Color(theme.ColorNameForeground)
+
+	// Try to parse favouriteColour hex
+	if parsedCol, err := utils.ParseHexColor(favouriteColour); err == nil {
+		col = parsedCol
+	}
+
+	usernameLabel := canvas.NewText(username, col)
 	usernameLabel.Alignment = fyne.TextAlignLeading
 	usernameLabel.TextStyle = fyne.TextStyle{Bold: true}
 	usernameLabel.TextSize = 20
@@ -45,7 +53,6 @@ func messageBubble(username, message string) fyne.CanvasObject {
 	messageLabel := canvas.NewText(message, theme.Color(theme.ColorNameForeground))
 	messageLabel.Alignment = fyne.TextAlignLeading
 
-	// Create the vertical container for message contents
 	content := container.NewVBox(
 		usernameLabel,
 		messageLabel,
@@ -57,7 +64,7 @@ func messageBubble(username, message string) fyne.CanvasObject {
 	leftPaddingBox.SetMinSize(fyne.NewSize(leftPaddingSize, 0))
 
 	return container.NewHBox(
-		leftPaddingBox, // left padding spacer
+		leftPaddingBox,
 		content,
 	)
 }
@@ -155,10 +162,22 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 							return
 						}
 
+						messagesToDisplay := []string{}
+						author := decrypted.Author
+						favouriteColour := "#FFFFFF"
+
 						for _, object := range decrypted.Objects {
-							if object.Type == "text" {
-								historyContainer.History.Add(messageBubble(decrypted.Author, object.Content["text"]))
+
+							switch object.Type {
+							case "text":
+								messagesToDisplay = append(messagesToDisplay, object.Content["text"])
+							case "metadata":
+								favouriteColour = object.Content["favouriteColour"]
 							}
+						}
+
+						for _, message := range messagesToDisplay {
+							historyContainer.History.Add(messageBubble(author, favouriteColour, message))
 						}
 					}
 				}
@@ -192,12 +211,21 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 		contentMap := map[string]string{
 			"text": text,
 		}
+
+		metadataMap := map[string]string{
+			"favouriteColour": globals.SelfUser.FavouriteColour,
+		}
+
 		inputMessage := types.InputMessage{
 			Recipients: conversationTargets,
 			Objects: []types.MessageObject{
 				{
 					Type:    "text",
 					Content: contentMap,
+				},
+				{
+					Type:    "metadata",
+					Content: metadataMap,
 				},
 			},
 		}
@@ -214,7 +242,7 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 			return
 		}
 
-		historyContainer.History.Add(messageBubble("You", text))
+		historyContainer.History.Add(messageBubble("You", globals.SelfUser.FavouriteColour, text))
 		messageEntry.SetText("")
 		historyContainer.HistoryScroll.ScrollToBottom()
 	}

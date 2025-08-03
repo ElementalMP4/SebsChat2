@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"net/http"
 	"os"
 	"sebschat/globals"
@@ -193,4 +194,14 @@ func SendEncryptedMessage(encrypted types.EncryptedMessage) error {
 	}
 
 	return nil
+}
+
+func ParseHexColor(hex string) (color.Color, error) {
+	var r, g, b uint8
+	if _, err := fmt.Sscanf(hex, "#%02X%02X%02X", &r, &g, &b); err != nil {
+		if _, err := fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b); err != nil {
+			return nil, fmt.Errorf("invalid hex colour: %s", hex)
+		}
+	}
+	return color.NRGBA{R: r, G: g, B: b, A: 255}, nil
 }
