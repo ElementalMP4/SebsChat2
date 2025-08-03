@@ -60,7 +60,7 @@ type EncryptedMessage struct {
 	EncryptedKeys    map[string]string        `json:"encryptedKeys"`
 	SigningPublicKey string                   `json:"signingPublicKey"`
 	Sender           string                   `json:"sender"`
-	Receipt          string                   `json:"receipt"`
+	KeySignatures    map[string]string        `json:"keySignatures"`
 	Signature        string                   `json:"signature"`
 }
 

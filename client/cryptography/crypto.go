@@ -15,6 +15,7 @@ import (
 	"sebschat/types"
 	"sebschat/utils"
 
+	"github.com/gibson042/canonicaljson-go"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
 )
@@ -343,7 +344,7 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 		}
 
 		if !ed25519.Verify(signingPub, canonicalJSON, overallSignature) {
-			return fmt.Errorf("message signature verification failed")
+			return fmt.Errorf("overall signature verification failed")
 		}
 
 		return nil
@@ -632,5 +633,5 @@ func signMessage(message []byte, priv []byte) ([]byte, error) {
 }
 
 func canonicalize(v interface{}) ([]byte, error) {
-	return json.MarshalIndent(v, "", "")
+	return canonicaljson.Marshal(v)
 }

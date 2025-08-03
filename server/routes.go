@@ -1,12 +1,15 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/gibson042/canonicaljson-go"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -184,6 +187,34 @@ func messageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	origSig := msg.Signature
+	msg.Signature = "" // Remove temporarily
+
+	canonicalJSON, err := canonicalize(msg)
+	if err != nil {
+		http.Error(w, "Failed to canonicalize message", http.StatusBadRequest)
+		return
+	}
+
+	sigBytes, err := base64.StdEncoding.DecodeString(origSig)
+	if err != nil {
+		http.Error(w, "Invalid signature encoding", http.StatusBadRequest)
+		return
+	}
+
+	pubKeyBytes, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
+	if err != nil {
+		http.Error(w, "Invalid signing public key", http.StatusBadRequest)
+		return
+	}
+
+	if !ed25519.Verify(pubKeyBytes, canonicalJSON, sigBytes) {
+		http.Error(w, "Signature verification failed", http.StatusBadRequest)
+		return
+	}
+
+	msg.Signature = origSig
+
 	if msg.Sender != hashUsername(username) {
 		http.Error(w, "Sender does not match token", http.StatusUnauthorized)
 		return
@@ -201,16 +232,9 @@ func messageHandler(w http.ResponseWriter, r *http.Request) {
 			continue // user not online
 		}
 
-		// Strip out irrelevant keys
-		userMsg := msg
-		userMsg.EncryptedKeys = map[string]string{
-			recipient: msg.EncryptedKeys[recipient],
-		}
-		userMsg.Receipt = receipt
-
 		wsMsg := WebSocketMessage{
 			Type:    WS_CHAT_MESSAGE,
-			Payload: userMsg,
+			Payload: msg,
 		}
 
 		jsonMsg, err := json.Marshal(wsMsg)
@@ -276,4 +300,8 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(JustOneMessage{
 		Message: "Logged out",
 	})
+}
+
+func canonicalize(v interface{}) ([]byte, error) {
+	return canonicaljson.Marshal(v)
 }

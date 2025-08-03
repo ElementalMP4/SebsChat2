@@ -8,6 +8,8 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.29
 )
 
+require github.com/gibson042/canonicaljson-go v1.0.3
+
 require (
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.3

@@ -153,13 +153,13 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 						err = json.Unmarshal(msg.Payload, &encryptedMessage)
 						if err != nil {
 							dialog.ShowError(fmt.Errorf("error unmarshalling message: %v", err), win)
-							return
+							continue
 						}
 
 						decrypted, err := cryptography.Decrypt(encryptedMessage, true)
 						if err != nil {
 							dialog.ShowError(fmt.Errorf("error decrypting message: %v", err), win)
-							return
+							continue
 						}
 
 						messagesToDisplay := []string{}
