@@ -61,6 +61,7 @@ type EncryptedMessage struct {
 	SigningPublicKey string                   `json:"signingPublicKey"`
 	Sender           string                   `json:"sender"`
 	Receipt          string                   `json:"receipt"`
+	Signature        string                   `json:"signature"`
 }
 
 type SendReceipt struct {
