@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"sebschat/cryptography"
 	"sebschat/globals"
@@ -155,16 +154,17 @@ func main() {
 	}
 	file, err = os.Open(globals.Config.ContactsFilePath)
 	if err != nil {
-		log.Fatalf("error opening contacts file: %v", err)
+		dialog.ShowError(fmt.Errorf("error opening contacts file: %v", err), w)
+		return
 	}
 	defer file.Close()
 	byteValue, err = io.ReadAll(file)
 	if err != nil {
-		log.Fatalf("error reading contacts file: %v", err)
+		dialog.ShowError(fmt.Errorf("error reading contacts file: %v", err), w)
 	}
 	err = json.Unmarshal(byteValue, &contacts)
 	if err != nil {
-		log.Fatalf("error unmarshalling contacts file: %v", err)
+		dialog.ShowError(fmt.Errorf("error unmarshalling contacts file: %v", err), w)
 	}
 	globals.Contacts = contacts.Contacts
 

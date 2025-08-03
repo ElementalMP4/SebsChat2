@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"sebschat/globals"
+	"sebschat/log"
 	"sebschat/types"
 	"sebschat/utils"
 
@@ -19,12 +20,29 @@ import (
 )
 
 func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMessage, error) {
-	senderPriv, err := utils.GetSelfPrivateKey()
+	var (
+		senderPriv     []byte
+		symKey         []byte
+		err            error
+		sharedKey      []byte
+		encKey         []byte
+		encNonce       []byte
+		sig            []byte
+		userNameOrHash string
+	)
+
+	err = log.TimedTask("Load encryption key", func() error {
+		senderPriv, err = utils.GetSelfPrivateKey()
+		if err != nil {
+			return err
+		}
+		if len(inputMessage.Recipients) == 0 {
+			return fmt.Errorf("message has no recipients")
+		}
+		return nil
+	})
 	if err != nil {
 		return types.EncryptedMessage{}, err
-	}
-	if len(inputMessage.Recipients) == 0 {
-		return types.EncryptedMessage{}, fmt.Errorf("message has no recipients")
 	}
 
 	recipientsWithoutKeys := utils.CheckContactsExist(inputMessage.Recipients)
@@ -32,8 +50,11 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 		return types.EncryptedMessage{}, fmt.Errorf("recipient key not found for %s", strings.Join(recipientsWithoutKeys, ", "))
 	}
 
-	symKey := make([]byte, 32)
-	rand.Read(symKey)
+	log.TimedTask("Generate symmetric key", func() error {
+		symKey = make([]byte, 32)
+		rand.Read(symKey)
+		return nil
+	})
 
 	var messageObjects []types.EncryptedMessageObject
 
@@ -44,24 +65,44 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 		switch object.Type {
 		case "text", "metadata":
 			{
-				contentMapBytes, err := json.Marshal(object.Content)
-				if err != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("error encoding message: %v", err)
-				}
+				var (
+					contentMapBytes []byte
+					ciphertext      []byte
+					nonce           []byte
+				)
 
-				ciphertext, nonce, err := encryptSymmetric(contentMapBytes, symKey)
-				if err != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("error encrypting message: %v", err)
-				}
+				err = log.TimedTask(fmt.Sprintf("Encrypt %s object", object.Type), func() error {
+					contentMapBytes, err = json.Marshal(object.Content)
+					if err != nil {
+						return fmt.Errorf("error encoding message: %v", err)
+					}
 
-				signingPriv, err := utils.GetSelfSigningPrivateKey()
+					ciphertext, nonce, err = encryptSymmetric(contentMapBytes, symKey)
+					if err != nil {
+						return fmt.Errorf("error encrypting message: %v", err)
+					}
+
+					return nil
+				})
 				if err != nil {
 					return types.EncryptedMessage{}, err
 				}
 
-				sig, err := signMessage(ciphertext, signingPriv)
+				log.TimedTask(fmt.Sprintf("Sign %s object", object.Type), func() error {
+					signingPriv, err := utils.GetSelfSigningPrivateKey()
+					if err != nil {
+						return err
+					}
+
+					sig, err = signMessage(ciphertext, signingPriv)
+					if err != nil {
+						return fmt.Errorf("error signing message: %v", err)
+					}
+
+					return nil
+				})
 				if err != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("error signing message: %v", err)
+					return types.EncryptedMessage{}, err
 				}
 
 				messageObjects = append(messageObjects, types.EncryptedMessageObject{
@@ -73,45 +114,72 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 			}
 		case "file":
 			{
-				file, err := os.Open(object.Content["fileName"])
-				if err != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("failed to open file %s to be encrypted: %w", object.Content, err)
-				}
-				defer file.Close()
+				var (
+					bytes         []byte
+					encryptedFile []byte
+					nonce         []byte
+				)
 
-				bytes, err := io.ReadAll(file)
-				if err != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("failed to read file %s to be encrypted: %w", object.Content, err)
-				}
+				err = log.TimedTask(fmt.Sprintf("Load file %s", object.Content["fileName"]), func() error {
+					file, err := os.Open(object.Content["fileName"])
+					if err != nil {
+						return fmt.Errorf("failed to open file %s to be encrypted: %w", object.Content, err)
+					}
+					defer file.Close()
 
-				var fileNamePtr *string
-				parts := strings.Split(object.Content["fileName"], "/")
-				fileName := parts[len(parts)-1]
-				fileNamePtr = &fileName
+					bytes, err = io.ReadAll(file)
+					if err != nil {
+						return fmt.Errorf("failed to read file %s to be encrypted: %w", object.Content, err)
+					}
 
-				contentMap := map[string]string{
-					"file":     base64.StdEncoding.EncodeToString(bytes),
-					"fileName": *fileNamePtr,
-				}
-
-				contentMapBytes, err := json.Marshal(contentMap)
-				if err != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("error encoding message: %v", err)
-				}
-
-				encryptedFile, nonce, err := encryptSymmetric(contentMapBytes, symKey)
-				if err != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("error encrypting message: %v", err)
-				}
-
-				signingPriv, err := utils.GetSelfSigningPrivateKey()
+					return nil
+				})
 				if err != nil {
 					return types.EncryptedMessage{}, err
 				}
 
-				sig, err := signMessage(encryptedFile, signingPriv)
+				err = log.TimedTask(fmt.Sprintf("Encrypt file %s", object.Content["fileName"]), func() error {
+					var fileNamePtr *string
+					parts := strings.Split(object.Content["fileName"], "/")
+					fileName := parts[len(parts)-1]
+					fileNamePtr = &fileName
+
+					contentMap := map[string]string{
+						"file":     base64.StdEncoding.EncodeToString(bytes),
+						"fileName": *fileNamePtr,
+					}
+
+					contentMapBytes, err := json.Marshal(contentMap)
+					if err != nil {
+						return fmt.Errorf("error encoding message: %v", err)
+					}
+
+					encryptedFile, nonce, err = encryptSymmetric(contentMapBytes, symKey)
+					if err != nil {
+						return fmt.Errorf("error encrypting message: %v", err)
+					}
+
+					return nil
+				})
 				if err != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("error signing message: %v", err)
+					return types.EncryptedMessage{}, err
+				}
+
+				err = log.TimedTask(fmt.Sprintf("Sign file %s", object.Content["fileName"]), func() error {
+					signingPriv, err := utils.GetSelfSigningPrivateKey()
+					if err != nil {
+						return err
+					}
+
+					sig, err = signMessage(encryptedFile, signingPriv)
+					if err != nil {
+						return fmt.Errorf("error signing message: %v", err)
+					}
+
+					return nil
+				})
+				if err != nil {
+					return types.EncryptedMessage{}, err
 				}
 
 				messageObjects = append(messageObjects, types.EncryptedMessageObject{
@@ -132,35 +200,58 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 	keySignatures := make(map[string]string)
 
 	for _, user := range inputMessage.Recipients {
-		pub, err := utils.GetContactPublicKey(user)
+
+		err = log.TimedTask(fmt.Sprintf("Derive shared key for %s", user), func() error {
+			pub, err := utils.GetContactPublicKey(user)
+			if err != nil {
+				return err
+			}
+
+			sharedKey, err = deriveSharedKey(senderPriv, pub)
+			if err != nil {
+				return fmt.Errorf("error deriving shared key: %v", err)
+			}
+
+			return nil
+		})
 		if err != nil {
 			return types.EncryptedMessage{}, err
 		}
 
-		sharedKey, err := deriveSharedKey(senderPriv, pub)
-		if err != nil {
-			return types.EncryptedMessage{}, fmt.Errorf("error deriving shared key: %v", err)
-		}
-		encKey, encNonce, err := encryptSymmetric(symKey, sharedKey)
-		if err != nil {
-			return types.EncryptedMessage{}, fmt.Errorf("error encrypting symmetric key: %v", err)
-		}
+		err = log.TimedTask(fmt.Sprintf("Encrypted shared key for %s", user), func() error {
+			encKey, encNonce, err = encryptSymmetric(symKey, sharedKey)
+			if err != nil {
+				return fmt.Errorf("error encrypting symmetric key: %v", err)
+			}
 
-		userNameOrHash := user
-		if hashNames {
-			userNameOrHash = utils.HashString(user)
-		}
-
-		signingPriv, err := utils.GetSelfSigningPrivateKey()
+			return nil
+		})
 		if err != nil {
 			return types.EncryptedMessage{}, err
 		}
 
-		keyPayload := append([]byte(userNameOrHash), encNonce...)
-		keyPayload = append(keyPayload, encKey...)
-		sig, err := signMessage(keyPayload, signingPriv)
+		err = log.TimedTask(fmt.Sprintf("Sign shared key for %s", user), func() error {
+			userNameOrHash = user
+			if hashNames {
+				userNameOrHash = utils.HashString(user)
+			}
+
+			signingPriv, err := utils.GetSelfSigningPrivateKey()
+			if err != nil {
+				return err
+			}
+
+			keyPayload := append([]byte(userNameOrHash), encNonce...)
+			keyPayload = append(keyPayload, encKey...)
+			sig, err = signMessage(keyPayload, signingPriv)
+			if err != nil {
+				return fmt.Errorf("error signing key payload: %v", err)
+			}
+
+			return nil
+		})
 		if err != nil {
-			return types.EncryptedMessage{}, fmt.Errorf("error signing key payload: %v", err)
+			return types.EncryptedMessage{}, err
 		}
 
 		encryptedKeys[userNameOrHash] = base64.StdEncoding.EncodeToString(append(encNonce, encKey...))
@@ -185,21 +276,30 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 		Sender:           senderNameOrHash,
 	}
 
-	msgToSign := outputMsg
-	msgToSign.Signature = ""
+	err = log.TimedTask("Sign full message", func() error {
+		msgToSign := outputMsg
+		msgToSign.Signature = ""
 
-	canonicalJSON, err := canonicalize(msgToSign)
-	if err != nil {
-		return types.EncryptedMessage{}, fmt.Errorf("failed to canonicalize message: %v", err)
-	}
+		canonicalJSON, err := canonicalize(msgToSign)
+		if err != nil {
+			return fmt.Errorf("failed to canonicalize message: %v", err)
+		}
 
-	signingPriv, err := utils.GetSelfSigningPrivateKey()
+		signingPriv, err := utils.GetSelfSigningPrivateKey()
+		if err != nil {
+			return err
+		}
+
+		sig = ed25519.Sign(signingPriv, canonicalJSON)
+		outputMsg.Signature = base64.StdEncoding.EncodeToString(sig)
+
+		return nil
+	})
 	if err != nil {
 		return types.EncryptedMessage{}, err
 	}
 
-	sig := ed25519.Sign(signingPriv, canonicalJSON)
-	outputMsg.Signature = base64.StdEncoding.EncodeToString(sig)
+	log.LogSuccess("Successfully encrypted!")
 
 	return outputMsg, nil
 }
@@ -209,23 +309,47 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 	sigField := msg.Signature
 	msgToVerify.Signature = ""
 
-	canonicalJSON, err := canonicalize(msgToVerify)
-	if err != nil {
-		return types.DecryptedMessage{}, fmt.Errorf("failed to canonicalize message for verification: %v", err)
-	}
+	var (
+		err              error
+		signingPub       []byte
+		sharedKey        []byte
+		encKey           []byte
+		encNonce         []byte
+		symKey           []byte
+		nonce            []byte
+		ciphertext       []byte
+		plaintext        []byte
+		fileBytes        []byte
+		decryptedFile    []byte
+		decryptedObjects []types.MessageObject
+		sender           *types.Contact
+		content          map[string]string
+	)
 
-	overallSignature, err := base64.StdEncoding.DecodeString(sigField)
-	if err != nil {
-		return types.DecryptedMessage{}, fmt.Errorf("invalid message signature encoding: %v", err)
-	}
+	err = log.TimedTask("Verify message", func() error {
+		canonicalJSON, err := canonicalize(msgToVerify)
+		if err != nil {
+			return fmt.Errorf("failed to canonicalize message for verification: %v", err)
+		}
 
-	signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
-	if err != nil {
-		return types.DecryptedMessage{}, fmt.Errorf("invalid signing pubkey: %v", err)
-	}
+		overallSignature, err := base64.StdEncoding.DecodeString(sigField)
+		if err != nil {
+			return fmt.Errorf("invalid message signature encoding: %v", err)
+		}
 
-	if !ed25519.Verify(signingPub, canonicalJSON, overallSignature) {
-		return types.DecryptedMessage{}, fmt.Errorf("message signature verification failed")
+		signingPub, err = base64.StdEncoding.DecodeString(msg.SigningPublicKey)
+		if err != nil {
+			return fmt.Errorf("invalid signing pubkey: %v", err)
+		}
+
+		if !ed25519.Verify(signingPub, canonicalJSON, overallSignature) {
+			return fmt.Errorf("message signature verification failed")
+		}
+
+		return nil
+	})
+	if err != nil {
+		return types.DecryptedMessage{}, err
 	}
 
 	selfUsernameOrHash := globals.SelfUser.Name
@@ -241,7 +365,6 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 		return types.DecryptedMessage{}, fmt.Errorf("message does not contain key for this user")
 	}
 
-	var sender *types.Contact = nil
 	if namesAreHashed {
 		sender = utils.GetContactFromHash(msg.Sender)
 	} else {
@@ -263,37 +386,56 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 		return types.DecryptedMessage{}, err
 	}
 
-	sharedKey, err := deriveSharedKey(priv, senderPub)
+	err = log.TimedTask("Derive shared key", func() error {
+		sharedKey, err = deriveSharedKey(priv, senderPub)
+		if err != nil {
+			return fmt.Errorf("error deriving shared key: %v", err)
+		}
+
+		return nil
+	})
 	if err != nil {
-		return types.DecryptedMessage{}, fmt.Errorf("error deriving shared key: %v", err)
+		return types.DecryptedMessage{}, err
 	}
 
-	encKeyFull, err := base64.StdEncoding.DecodeString(msg.EncryptedKeys[selfUsernameOrHash])
+	err = log.TimedTask("Verify shared key", func() error {
+		encKeyFull, err := base64.StdEncoding.DecodeString(msg.EncryptedKeys[selfUsernameOrHash])
+		if err != nil {
+			return fmt.Errorf("error decoding encrypted key: %v", err)
+		}
+		encNonce = encKeyFull[:chacha20poly1305.NonceSizeX]
+		encKey = encKeyFull[chacha20poly1305.NonceSizeX:]
+
+		sig := msg.KeySignatures[selfUsernameOrHash]
+		decodedSig, err := base64.StdEncoding.DecodeString(sig)
+		if err != nil {
+			return fmt.Errorf("error decoding key signature: %v", err)
+		}
+
+		keyPayload := append([]byte(selfUsernameOrHash), encNonce...)
+		keyPayload = append(keyPayload, encKey...)
+
+		if !ed25519.Verify(signingPub, keyPayload, decodedSig) {
+			return fmt.Errorf("symmetric key signature verification failed")
+		}
+
+		return nil
+	})
 	if err != nil {
-		return types.DecryptedMessage{}, fmt.Errorf("error decoding encrypted key: %v", err)
+		return types.DecryptedMessage{}, err
 	}
-	encNonce := encKeyFull[:chacha20poly1305.NonceSizeX]
-	encKey := encKeyFull[chacha20poly1305.NonceSizeX:]
 
-	sig := msg.KeySignatures[selfUsernameOrHash]
-	decodedSig, err := base64.StdEncoding.DecodeString(sig)
+	err = log.TimedTask("Decrypt shared key", func() error {
+		symKey, err = decryptSymmetric(encKey, sharedKey, encNonce)
+		if err != nil {
+			return fmt.Errorf("error decrypting symmetric key: %v", err)
+		}
+
+		return nil
+	})
 	if err != nil {
-		return types.DecryptedMessage{}, fmt.Errorf("error decoding key signature: %v", err)
+		return types.DecryptedMessage{}, err
 	}
-
-	keyPayload := append([]byte(selfUsernameOrHash), encNonce...)
-	keyPayload = append(keyPayload, encKey...)
-
-	if !ed25519.Verify(signingPub, keyPayload, decodedSig) {
-		return types.DecryptedMessage{}, fmt.Errorf("symmetric key signature verification failed")
-	}
-
-	symKey, err := decryptSymmetric(encKey, sharedKey, encNonce)
-	if err != nil {
-		return types.DecryptedMessage{}, fmt.Errorf("error decrypting symmetric key: %v", err)
-	}
-
-	var decryptedObjects []types.MessageObject
 
 	for _, object := range msg.Objects {
 		if object.Content == "" {
@@ -302,36 +444,50 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 		switch object.Type {
 		case "text", "metadata":
 			{
-				nonce, err := base64.StdEncoding.DecodeString(object.Verify)
+
+				err = log.TimedTask(fmt.Sprintf("Verify signature for %s object", object.Type), func() error {
+					nonce, err = base64.StdEncoding.DecodeString(object.Verify)
+					if err != nil {
+						return fmt.Errorf("error decoding nonce: %v", err)
+					}
+
+					ciphertext, err = base64.StdEncoding.DecodeString(object.Content)
+					if err != nil {
+						return fmt.Errorf("error decoding ciphertext: %v", err)
+					}
+
+					sig, err := base64.StdEncoding.DecodeString(object.Signature)
+					if err != nil {
+						return fmt.Errorf("error decoding signature: %v", err)
+					}
+
+					signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
+					if err != nil {
+						return fmt.Errorf("error decoding signing public key: %v", err)
+					}
+
+					if !ed25519.Verify(signingPub, ciphertext, sig) {
+						return fmt.Errorf("signature verification failed")
+					}
+
+					return nil
+				})
 				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decoding nonce: %v", err)
+					return types.DecryptedMessage{}, err
 				}
 
-				ciphertext, err := base64.StdEncoding.DecodeString(object.Content)
+				err = log.TimedTask(fmt.Sprintf("Decrypted %s object", object.Type), func() error {
+					plaintext, err = decryptSymmetric(ciphertext, symKey, nonce)
+					if err != nil {
+						return fmt.Errorf("error decrypting message: %v", err)
+					}
+
+					return nil
+				})
 				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decoding ciphertext: %v", err)
+					return types.DecryptedMessage{}, err
 				}
 
-				sig, err := base64.StdEncoding.DecodeString(object.Signature)
-				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decoding signature: %v", err)
-				}
-
-				signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
-				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decoding signing public key: %v", err)
-				}
-
-				if !ed25519.Verify(signingPub, ciphertext, sig) {
-					return types.DecryptedMessage{}, fmt.Errorf("signature verification failed")
-				}
-
-				plaintext, err := decryptSymmetric(ciphertext, symKey, nonce)
-				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decrypting message: %v", err)
-				}
-
-				var content map[string]string
 				err = json.Unmarshal(plaintext, &content)
 				if err != nil {
 					return types.DecryptedMessage{}, fmt.Errorf("failed to decode content: %v", err)
@@ -346,50 +502,70 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 			}
 		case "file":
 			{
-				nonce, err := base64.StdEncoding.DecodeString(object.Verify)
+				err = log.TimedTask(fmt.Sprintf("Verify signature for %s object", object.Type), func() error {
+					nonce, err = base64.StdEncoding.DecodeString(object.Verify)
+					if err != nil {
+						return fmt.Errorf("error decoding nonce: %v", err)
+					}
+
+					fileBytes, err = base64.StdEncoding.DecodeString(object.Content)
+					if err != nil {
+						return fmt.Errorf("error decoding file: %v", err)
+					}
+
+					sig, err := base64.StdEncoding.DecodeString(object.Signature)
+					if err != nil {
+						return fmt.Errorf("error decoding signature: %v", err)
+					}
+
+					signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
+					if err != nil {
+						return fmt.Errorf("error decoding signing public key: %v", err)
+					}
+
+					if !ed25519.Verify(signingPub, fileBytes, sig) {
+						return fmt.Errorf("signature verification failed")
+					}
+
+					return nil
+				})
 				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decoding nonce: %v", err)
+					return types.DecryptedMessage{}, err
 				}
 
-				fileBytes, err := base64.StdEncoding.DecodeString(object.Content)
+				err = log.TimedTask(fmt.Sprintf("Decrypt %s object", object.Type), func() error {
+					decryptedFile, err = decryptSymmetric(fileBytes, symKey, nonce)
+					if err != nil {
+						return fmt.Errorf("error decrypting file: %v", err)
+					}
+
+					return nil
+				})
 				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decoding file: %v", err)
+					return types.DecryptedMessage{}, err
 				}
 
-				sig, err := base64.StdEncoding.DecodeString(object.Signature)
-				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decoding signature: %v", err)
-				}
+				err = log.TimedTask(fmt.Sprintf("Save file %s", content["fileName"]), func() error {
+					err = json.Unmarshal(decryptedFile, &content)
+					if err != nil {
+						return fmt.Errorf("failed to decode content: %v", err)
+					}
 
-				signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
-				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decoding signing public key: %v", err)
-				}
+					decryptedFileBytes, err := base64.StdEncoding.DecodeString(content["file"])
+					if err != nil {
+						return fmt.Errorf("error decoding file: %v", err)
+					}
 
-				if !ed25519.Verify(signingPub, fileBytes, sig) {
-					return types.DecryptedMessage{}, fmt.Errorf("signature verification failed")
-				}
+					outputPath := fmt.Sprintf("%s/%s", globals.Config.FileStore, content["fileName"])
+					err = os.WriteFile(outputPath, decryptedFileBytes, 0600)
+					if err != nil {
+						return fmt.Errorf("failed to write decrypted file: %w", err)
+					}
 
-				decryptedFile, err := decryptSymmetric(fileBytes, symKey, nonce)
+					return nil
+				})
 				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decrypting file: %v", err)
-				}
-
-				var content map[string]string
-				err = json.Unmarshal(decryptedFile, &content)
-				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("failed to decode content: %v", err)
-				}
-
-				decryptedFileBytes, err := base64.StdEncoding.DecodeString(content["file"])
-				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("error decoding file: %v", err)
-				}
-
-				outputPath := fmt.Sprintf("%s/%s", globals.Config.FileStore, content["fileName"])
-				err = os.WriteFile(outputPath, decryptedFileBytes, 0600)
-				if err != nil {
-					return types.DecryptedMessage{}, fmt.Errorf("failed to write decrypted file: %w", err)
+					return types.DecryptedMessage{}, err
 				}
 
 				outputMap := map[string]string{
@@ -409,6 +585,8 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 			}
 		}
 	}
+
+	log.LogSuccess("Successfully decrypted!")
 
 	return types.DecryptedMessage{
 		Objects: decryptedObjects,

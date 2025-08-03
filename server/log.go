@@ -180,7 +180,7 @@ func LogFatalError(err error) {
 func LogTask(taskName string, taskFunc func() error) {
 	start := time.Now()
 
-	timestamp := time.Now().Format("2006/01/02 15:04:05")
+	timestamp := time.Now().Format("2000/01/01 12:00:00")
 	fmt.Printf("%s%s %s%-50s%s", colorGrey, timestamp, colorCyan, taskName+"...", colorReset)
 
 	err := taskFunc()
