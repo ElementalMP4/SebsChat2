@@ -184,10 +184,50 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 		SigningPublicKey: base64.StdEncoding.EncodeToString(signingPub),
 		Sender:           senderNameOrHash,
 	}
+
+	msgToSign := outputMsg
+	msgToSign.Signature = ""
+
+	canonicalJSON, err := canonicalize(msgToSign)
+	if err != nil {
+		return types.EncryptedMessage{}, fmt.Errorf("failed to canonicalize message: %v", err)
+	}
+
+	signingPriv, err := utils.GetSelfSigningPrivateKey()
+	if err != nil {
+		return types.EncryptedMessage{}, err
+	}
+
+	sig := ed25519.Sign(signingPriv, canonicalJSON)
+	outputMsg.Signature = base64.StdEncoding.EncodeToString(sig)
+
 	return outputMsg, nil
 }
 
 func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMessage, error) {
+	msgToVerify := msg
+	sigField := msg.Signature
+	msgToVerify.Signature = ""
+
+	canonicalJSON, err := canonicalize(msgToVerify)
+	if err != nil {
+		return types.DecryptedMessage{}, fmt.Errorf("failed to canonicalize message for verification: %v", err)
+	}
+
+	overallSignature, err := base64.StdEncoding.DecodeString(sigField)
+	if err != nil {
+		return types.DecryptedMessage{}, fmt.Errorf("invalid message signature encoding: %v", err)
+	}
+
+	signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
+	if err != nil {
+		return types.DecryptedMessage{}, fmt.Errorf("invalid signing pubkey: %v", err)
+	}
+
+	if !ed25519.Verify(signingPub, canonicalJSON, overallSignature) {
+		return types.DecryptedMessage{}, fmt.Errorf("message signature verification failed")
+	}
+
 	selfUsernameOrHash := globals.SelfUser.Name
 	if namesAreHashed {
 		selfUsernameOrHash = utils.HashString(globals.SelfUser.Name)
@@ -243,11 +283,6 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 
 	keyPayload := append([]byte(selfUsernameOrHash), encNonce...)
 	keyPayload = append(keyPayload, encKey...)
-
-	signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
-	if err != nil {
-		return types.DecryptedMessage{}, fmt.Errorf("error decoding signing key: %v", err)
-	}
 
 	if !ed25519.Verify(signingPub, keyPayload, decodedSig) {
 		return types.DecryptedMessage{}, fmt.Errorf("symmetric key signature verification failed")
@@ -416,4 +451,8 @@ func decryptSymmetric(ciphertext, key, nonce []byte) ([]byte, error) {
 
 func signMessage(message []byte, priv []byte) ([]byte, error) {
 	return ed25519.Sign(priv, message), nil
+}
+
+func canonicalize(v interface{}) ([]byte, error) {
+	return json.MarshalIndent(v, "", "")
 }
