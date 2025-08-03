@@ -65,7 +65,7 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 	upgrader.Subprotocols = []string{authHeader}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Println("WebSocket upgrade error:", err)
+		LogError(fmt.Sprintf("WebSocket upgrade error: %v", err))
 		return
 	}
 
@@ -95,7 +95,7 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 
 	jsonMsg, err := json.Marshal(msg)
 	if err != nil {
-		fmt.Println("Failed to marshal message:", err)
+		LogError(fmt.Sprintf("Failed to marshal message: %v", err))
 		return
 	}
 	conn.WriteMessage(websocket.TextMessage, jsonMsg)

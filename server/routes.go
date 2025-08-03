@@ -215,12 +215,12 @@ func messageHandler(w http.ResponseWriter, r *http.Request) {
 
 		jsonMsg, err := json.Marshal(wsMsg)
 		if err != nil {
-			fmt.Println("Failed to marshal message for", recipient, ":", err)
+			LogError(fmt.Sprintf("Failed to marshal message for %s : %v", recipient, err))
 			continue
 		}
 
 		if err := conn.WriteMessage(websocket.TextMessage, jsonMsg); err != nil {
-			fmt.Println("Failed to send message to", recipient, ":", err)
+			LogError(fmt.Sprintf("Failed to send message to %s : %v", recipient, err))
 			continue
 		}
 
