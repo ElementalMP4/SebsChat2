@@ -24,6 +24,7 @@ type SelfUser struct {
 	SigningPublicKey  string `json:"signingPublicKey"`
 	SigningPrivateKey string `json:"signingPrivateKey"`
 	Server            Server `json:"server"`
+	FavouriteColour   string `json:"favouriteColour"`
 }
 
 type Server struct {
@@ -33,17 +34,15 @@ type Server struct {
 }
 
 type MessageObject struct {
-	Type     string  `json:"type"`
-	Content  *string `json:"content,omitempty"`
-	FilePath *string `json:"filePath,omitempty"`
+	Type    string            `json:"type"`
+	Content map[string]string `json:"content"`
 }
 
 type EncryptedMessageObject struct {
-	Type      string  `json:"type"`
-	Content   string  `json:"content"`
-	FileName  *string `json:"fileName,omitempty"`
-	Verify    string  `json:"verify"`
-	Signature string  `json:"signature"`
+	Type      string `json:"type"`
+	Content   string `json:"content"`
+	Verify    string `json:"verify"`
+	Signature string `json:"signature"`
 }
 
 type EncryptedMessage struct {

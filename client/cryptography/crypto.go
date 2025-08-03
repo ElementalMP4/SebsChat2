@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -37,18 +38,18 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 	var messageObjects []types.EncryptedMessageObject
 
 	for _, object := range inputMessage.Objects {
+		if object.Content == nil {
+			return types.EncryptedMessage{}, fmt.Errorf("object content cannot be empty")
+		}
 		switch object.Type {
 		case "text":
 			{
-				if object.Content == nil {
-					return types.EncryptedMessage{}, fmt.Errorf("text object content cannot be empty")
+				contentMapBytes, err := json.Marshal(object.Content)
+				if err != nil {
+					return types.EncryptedMessage{}, fmt.Errorf("error encoding message: %v", err)
 				}
 
-				if object.FilePath != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("text object cannot have a file path")
-				}
-
-				ciphertext, nonce, err := encryptSymmetric([]byte(*object.Content), symKey)
+				ciphertext, nonce, err := encryptSymmetric(contentMapBytes, symKey)
 				if err != nil {
 					return types.EncryptedMessage{}, fmt.Errorf("error encrypting message: %v", err)
 				}
@@ -72,25 +73,33 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 			}
 		case "file":
 			{
-				if object.FilePath == nil {
-					return types.EncryptedMessage{}, fmt.Errorf("file object path cannot be empty")
-				}
-
-				if object.Content != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("file object cannot have content")
-				}
-
-				file, err := os.Open(*object.FilePath)
+				file, err := os.Open(object.Content["fileName"])
 				if err != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("failed to open file %s to be encrypted: %w", *object.FilePath, err)
+					return types.EncryptedMessage{}, fmt.Errorf("failed to open file %s to be encrypted: %w", object.Content, err)
 				}
 				defer file.Close()
 
 				bytes, err := io.ReadAll(file)
 				if err != nil {
-					return types.EncryptedMessage{}, fmt.Errorf("failed to read file %s to be encrypted: %w", *object.FilePath, err)
+					return types.EncryptedMessage{}, fmt.Errorf("failed to read file %s to be encrypted: %w", object.Content, err)
 				}
-				encryptedFile, nonce, err := encryptSymmetric(bytes, symKey)
+
+				var fileNamePtr *string
+				parts := strings.Split(object.Content["fileName"], "/")
+				fileName := parts[len(parts)-1]
+				fileNamePtr = &fileName
+
+				contentMap := map[string]string{
+					"file":     base64.StdEncoding.EncodeToString(bytes),
+					"fileName": *fileNamePtr,
+				}
+
+				contentMapBytes, err := json.Marshal(contentMap)
+				if err != nil {
+					return types.EncryptedMessage{}, fmt.Errorf("error encoding message: %v", err)
+				}
+
+				encryptedFile, nonce, err := encryptSymmetric(contentMapBytes, symKey)
 				if err != nil {
 					return types.EncryptedMessage{}, fmt.Errorf("error encrypting message: %v", err)
 				}
@@ -105,17 +114,9 @@ func Encrypt(inputMessage types.InputMessage, hashNames bool) (types.EncryptedMe
 					return types.EncryptedMessage{}, fmt.Errorf("error signing message: %v", err)
 				}
 
-				var fileNamePtr *string
-				if object.FilePath != nil {
-					parts := strings.Split(*object.FilePath, "/")
-					fileName := parts[len(parts)-1]
-					fileNamePtr = &fileName
-				}
-
 				messageObjects = append(messageObjects, types.EncryptedMessageObject{
 					Type:      object.Type,
 					Content:   base64.StdEncoding.EncodeToString(encryptedFile),
-					FileName:  fileNamePtr,
 					Verify:    base64.StdEncoding.EncodeToString(nonce),
 					Signature: base64.StdEncoding.EncodeToString(sig),
 				})
@@ -225,13 +226,12 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 	var decryptedObjects []types.MessageObject
 
 	for _, object := range msg.Objects {
+		if object.Content == "" {
+			return types.DecryptedMessage{}, fmt.Errorf("object content cannot be empty")
+		}
 		switch object.Type {
-		case "text":
+		case "text", "metadata":
 			{
-				if object.Content == "" {
-					return types.DecryptedMessage{}, fmt.Errorf("text object content cannot be empty")
-				}
-
 				nonce, err := base64.StdEncoding.DecodeString(object.Verify)
 				if err != nil {
 					return types.DecryptedMessage{}, fmt.Errorf("error decoding nonce: %v", err)
@@ -261,20 +261,21 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 					return types.DecryptedMessage{}, fmt.Errorf("error decrypting message: %v", err)
 				}
 
-				content := string(plaintext)
+				var content map[string]string
+				err = json.Unmarshal(plaintext, &content)
+				if err != nil {
+					return types.DecryptedMessage{}, fmt.Errorf("failed to decode content: %v", err)
+				}
+
 				decryptedObject := types.MessageObject{
 					Type:    object.Type,
-					Content: &content,
+					Content: content,
 				}
 
 				decryptedObjects = append(decryptedObjects, decryptedObject)
 			}
 		case "file":
 			{
-				if object.FileName == nil {
-					return types.DecryptedMessage{}, fmt.Errorf("file object name cannot be empty")
-				}
-
 				nonce, err := base64.StdEncoding.DecodeString(object.Verify)
 				if err != nil {
 					return types.DecryptedMessage{}, fmt.Errorf("error decoding nonce: %v", err)
@@ -304,15 +305,30 @@ func Decrypt(msg types.EncryptedMessage, namesAreHashed bool) (types.DecryptedMe
 					return types.DecryptedMessage{}, fmt.Errorf("error decrypting file: %v", err)
 				}
 
-				outputPath := fmt.Sprintf("%s/%s", globals.Config.FileStore, *object.FileName)
-				err = os.WriteFile(outputPath, decryptedFile, 0600)
+				var content map[string]string
+				err = json.Unmarshal(decryptedFile, &content)
+				if err != nil {
+					return types.DecryptedMessage{}, fmt.Errorf("failed to decode content: %v", err)
+				}
+
+				decryptedFileBytes, err := base64.StdEncoding.DecodeString(content["file"])
+				if err != nil {
+					return types.DecryptedMessage{}, fmt.Errorf("error decoding file: %v", err)
+				}
+
+				outputPath := fmt.Sprintf("%s/%s", globals.Config.FileStore, content["fileName"])
+				err = os.WriteFile(outputPath, decryptedFileBytes, 0600)
 				if err != nil {
 					return types.DecryptedMessage{}, fmt.Errorf("failed to write decrypted file: %w", err)
 				}
 
+				outputMap := map[string]string{
+					"fileName": content["fileName"],
+				}
+
 				decryptedObject := types.MessageObject{
-					Type:     object.Type,
-					FilePath: &outputPath,
+					Type:    object.Type,
+					Content: outputMap,
 				}
 
 				decryptedObjects = append(decryptedObjects, decryptedObject)

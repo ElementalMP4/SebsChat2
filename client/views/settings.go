@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"image/color"
 	"sebschat/globals"
 	"sebschat/types"
 	"sebschat/utils"
@@ -14,6 +15,11 @@ import (
 
 func SettingsUI(win fyne.Window) fyne.CanvasObject {
 	user := globals.SelfUser
+
+	var (
+		updateSaveBtn func()
+		isChanged     func() bool
+	)
 
 	// User fields
 	nameEntry := widget.NewEntry()
@@ -38,10 +44,23 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 	useTlsCheck := widget.NewCheck("Use TLS", func(b bool) {})
 	useTlsCheck.SetChecked(user.Server.UseTls)
 
+	// Favourite Colour
+	favouriteColour := user.FavouriteColour
+	colourDisplay := widget.NewLabel("Selected: " + favouriteColour)
+	colourBtn := widget.NewButton("Choose Colour", func() {
+		dialog.NewColorPicker("Pick a Favourite Colour", "Choose a colour", func(c color.Color) {
+			r, g, b, _ := c.RGBA()
+			hex := fmt.Sprintf("#%02X%02X%02X", uint8(r>>8), uint8(g>>8), uint8(b>>8))
+			favouriteColour = hex
+			colourDisplay.SetText("Selected: " + hex)
+			updateSaveBtn()
+		}, win).Show()
+	})
+
 	// Store original values for change detection
 	original := struct {
-		Name, PublicKey, PrivateKey, SigningPublicKey, SigningPrivateKey, Address string
-		UseTls                                                                    bool
+		Name, PublicKey, PrivateKey, SigningPublicKey, SigningPrivateKey, Address, FavouriteColour string
+		UseTls                                                                                     bool
 	}{
 		Name:              user.Name,
 		PublicKey:         user.PublicKey,
@@ -49,23 +68,28 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 		SigningPublicKey:  user.SigningPublicKey,
 		SigningPrivateKey: user.SigningPrivateKey,
 		Address:           user.Server.Address,
+		FavouriteColour:   user.FavouriteColour,
 		UseTls:            user.Server.UseTls,
 	}
 
 	// Helper to check if any field has changed
-	isChanged := func() bool {
+	isChanged = func() bool {
 		return nameEntry.Text != original.Name ||
 			publicKeyEntry.Text != original.PublicKey ||
 			privateKeyEntry.Text != original.PrivateKey ||
 			signingPublicKeyEntry.Text != original.SigningPublicKey ||
 			signingPrivateKeyEntry.Text != original.SigningPrivateKey ||
 			addressEntry.Text != original.Address ||
-			useTlsCheck.Checked != original.UseTls
+			useTlsCheck.Checked != original.UseTls ||
+			favouriteColour != original.FavouriteColour
 	}
 
 	// Function to update save button state
 	var saveBtn *widget.Button
-	updateSaveBtn := func() {
+	updateSaveBtn = func() {
+		if saveBtn == nil {
+			return
+		}
 		saveBtn.Disable()
 		if isChanged() {
 			saveBtn.Enable()
@@ -79,6 +103,7 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 			PrivateKey:        privateKeyEntry.Text,
 			SigningPublicKey:  signingPublicKeyEntry.Text,
 			SigningPrivateKey: signingPrivateKeyEntry.Text,
+			FavouriteColour:   favouriteColour,
 			Server: types.Server{
 				Address: addressEntry.Text,
 				UseTls:  useTlsCheck.Checked,
@@ -99,6 +124,7 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 		original.SigningPrivateKey = signingPrivateKeyEntry.Text
 		original.Address = addressEntry.Text
 		original.UseTls = useTlsCheck.Checked
+		original.FavouriteColour = favouriteColour
 
 		updateSaveBtn()
 	})
@@ -117,6 +143,7 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 	form := &widget.Form{
 		Items: []*widget.FormItem{
 			widget.NewFormItem("Name", nameEntry),
+			widget.NewFormItem("Favourite Colour", container.NewVBox(colourBtn, colourDisplay)),
 			widget.NewFormItem("Public Key", publicKeyEntry),
 			widget.NewFormItem("Private Key", privateKeyEntry),
 			widget.NewFormItem("Signing Public Key", signingPublicKeyEntry),
@@ -126,10 +153,7 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 		},
 	}
 
-	// Set buttons to stretch
 	saveBtn.Alignment = widget.ButtonAlignCenter
-
-	saveBtn.Importance = widget.HighImportance
 
 	return container.NewVBox(
 		utils.MakeHeaderLabel("Settings"),

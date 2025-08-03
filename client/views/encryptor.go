@@ -145,9 +145,12 @@ func encryptMessages(recipients []string, messages []string) (types.EncryptedMes
 	var objects []types.MessageObject
 
 	for _, message := range messages {
+		contentMap := map[string]string{
+			"text": message,
+		}
 		objects = append(objects, types.MessageObject{
 			Type:    "text",
-			Content: &message,
+			Content: contentMap,
 		})
 	}
 

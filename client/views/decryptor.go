@@ -68,7 +68,7 @@ func decryptToString(data []byte) (string, error) {
 
 	for _, object := range decrypted.Objects {
 		if object.Type == "text" {
-			output += fmt.Sprintf("%s: %s\n", decrypted.Author, *object.Content)
+			output += fmt.Sprintf("%s: %s\n", decrypted.Author, object.Content["text"])
 		}
 	}
 

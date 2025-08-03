@@ -157,7 +157,7 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 
 						for _, object := range decrypted.Objects {
 							if object.Type == "text" {
-								historyContainer.History.Add(messageBubble(decrypted.Author, *object.Content))
+								historyContainer.History.Add(messageBubble(decrypted.Author, object.Content["text"]))
 							}
 						}
 					}
@@ -189,12 +189,15 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 		connMutex.Lock()
 		defer connMutex.Unlock()
 
+		contentMap := map[string]string{
+			"text": text,
+		}
 		inputMessage := types.InputMessage{
 			Recipients: conversationTargets,
 			Objects: []types.MessageObject{
 				{
 					Type:    "text",
-					Content: &text,
+					Content: contentMap,
 				},
 			},
 		}
