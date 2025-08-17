@@ -166,9 +166,9 @@ func encryptMessages(recipients []string, messages []string) (types.EncryptedMes
 		Recipients: recipients,
 		Objects:    objects,
 	}
-	encrypted, err := cryptography.Encrypt(input, true)
+	encrypted, err := cryptography.Encrypt(input)
 	if err != nil {
 		return types.EncryptedMessage{}, err
 	}
-	return encrypted, nil
+	return *encrypted, nil
 }

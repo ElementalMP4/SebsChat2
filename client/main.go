@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -78,25 +76,16 @@ func main() {
 				return
 			}
 
-			priv, pub, err := cryptography.GenerateX25519KeyPair()
-			if err != nil {
-				dialog.ShowError(err, w)
-				return
-			}
-
-			pubSign, privSign, err := ed25519.GenerateKey(rand.Reader)
+			keys, err := cryptography.GenerateHybridKeypair()
 			if err != nil {
 				dialog.ShowError(err, w)
 				return
 			}
 
 			selfUser := types.SelfUser{
-				Name:              name,
-				PublicKey:         utils.BytesToBase64(pub),
-				PrivateKey:        utils.BytesToBase64(priv),
-				SigningPublicKey:  utils.BytesToBase64(pubSign),
-				SigningPrivateKey: utils.BytesToBase64(privSign),
-				FavouriteColour:   "#FFFFFF",
+				Name:            name,
+				Keys:            *keys,
+				FavouriteColour: "#FFFFFF",
 			}
 
 			globals.SelfUser = selfUser

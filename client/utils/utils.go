@@ -45,31 +45,6 @@ func HashString(s string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func GetSelfPrivateKey() ([]byte, error) {
-	return Base64ToBytes(globals.SelfUser.PrivateKey)
-}
-
-func GetSelfPublicKey() ([]byte, error) {
-	return Base64ToBytes(globals.SelfUser.PublicKey)
-}
-
-func GetSelfSigningPrivateKey() ([]byte, error) {
-	return Base64ToBytes(globals.SelfUser.SigningPrivateKey)
-}
-
-func GetSelfSigningPublicKey() ([]byte, error) {
-	return Base64ToBytes(globals.SelfUser.SigningPublicKey)
-}
-
-func GetContactPublicKey(contactName string) ([]byte, error) {
-	contact := GetContact(contactName)
-	if contact == nil {
-		return []byte{}, fmt.Errorf("contact %s not found", contactName)
-	}
-
-	return Base64ToBytes(contact.PublicKey)
-}
-
 func GetContactFromHash(hash string) *types.Contact {
 	for _, contact := range globals.Contacts {
 		if hash == HashString(contact.Name) {
@@ -144,8 +119,8 @@ func MessageToJson(input types.EncryptedMessage) ([]byte, error) {
 
 func ContactToJson() ([]byte, error) {
 	kex := types.KeyExchange{
-		KeyFrom: globals.SelfUser.Name,
-		Key:     globals.SelfUser.PublicKey,
+		From: globals.SelfUser.Name,
+		Keys: globals.SelfUser.Keys.Public,
 	}
 	data, err := json.MarshalIndent(kex, "", "  ")
 	if err != nil {

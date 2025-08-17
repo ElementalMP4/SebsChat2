@@ -156,7 +156,7 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 							continue
 						}
 
-						decrypted, err := cryptography.Decrypt(encryptedMessage, true)
+						decrypted, err := cryptography.Decrypt(&encryptedMessage)
 						if err != nil {
 							dialog.ShowError(fmt.Errorf("error decrypting message: %v", err), win)
 							continue
@@ -231,13 +231,13 @@ func ChatUI(win fyne.Window) fyne.CanvasObject {
 			},
 		}
 
-		encrypted, err := cryptography.Encrypt(inputMessage, true)
+		encrypted, err := cryptography.Encrypt(inputMessage)
 		if err != nil {
 			dialog.ShowError(fmt.Errorf("error encrypting message: %v", err), win)
 			return
 		}
 
-		err = utils.SendEncryptedMessage(encrypted)
+		err = utils.SendEncryptedMessage(*encrypted)
 		if err != nil {
 			dialog.ShowError(fmt.Errorf("error sending message: %v", err), win)
 			return
