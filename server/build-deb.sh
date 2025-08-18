@@ -6,6 +6,7 @@ APP_NAME="sebschat"
 VERSION="1.0.0"
 ARCH="amd64"
 REPO_URL="https://github.com/ElementalMP4/SebsChat2.git"
+BRANCH="main"
 
 TMP_BUILD_DIR="$(mktemp -d)"
 PKG_ROOT="$TMP_BUILD_DIR/${APP_NAME}-${VERSION}"
@@ -29,7 +30,7 @@ EOF
 
 # Clone and build server
 echo "📥 Cloning and building the app..."
-git clone "$REPO_URL" "$TMP_BUILD_DIR/src"
+git clone -b $BRANCH "$REPO_URL" "$TMP_BUILD_DIR/src"
 pushd "$TMP_BUILD_DIR/src/server" >/dev/null
 go build -o "$PKG_ROOT/opt/$APP_NAME/$APP_NAME"
 popd >/dev/null

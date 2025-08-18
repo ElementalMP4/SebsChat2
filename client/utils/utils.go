@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image/color"
+	"io"
 	"net/http"
 	"os"
 	"sebschat/globals"
@@ -43,31 +44,6 @@ func GetContactNames() []string {
 func HashString(s string) string {
 	hash := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(hash[:])
-}
-
-func GetSelfPrivateKey() ([]byte, error) {
-	return Base64ToBytes(globals.SelfUser.PrivateKey)
-}
-
-func GetSelfPublicKey() ([]byte, error) {
-	return Base64ToBytes(globals.SelfUser.PublicKey)
-}
-
-func GetSelfSigningPrivateKey() ([]byte, error) {
-	return Base64ToBytes(globals.SelfUser.SigningPrivateKey)
-}
-
-func GetSelfSigningPublicKey() ([]byte, error) {
-	return Base64ToBytes(globals.SelfUser.SigningPublicKey)
-}
-
-func GetContactPublicKey(contactName string) ([]byte, error) {
-	contact := GetContact(contactName)
-	if contact == nil {
-		return []byte{}, fmt.Errorf("contact %s not found", contactName)
-	}
-
-	return Base64ToBytes(contact.PublicKey)
 }
 
 func GetContactFromHash(hash string) *types.Contact {
@@ -144,8 +120,8 @@ func MessageToJson(input types.EncryptedMessage) ([]byte, error) {
 
 func ContactToJson() ([]byte, error) {
 	kex := types.KeyExchange{
-		KeyFrom: globals.SelfUser.Name,
-		Key:     globals.SelfUser.PublicKey,
+		From: globals.SelfUser.Name,
+		Keys: globals.SelfUser.Keys.Public,
 	}
 	data, err := json.MarshalIndent(kex, "", "  ")
 	if err != nil {
@@ -189,8 +165,13 @@ func SendEncryptedMessage(encrypted types.EncryptedMessage) error {
 	}
 	defer resp.Body.Close()
 
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read body from server")
+	}
+
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("message was rejected: %s", resp.Status)
+		return fmt.Errorf("message was rejected: %s - %s", resp.Status, string(respBytes))
 	}
 
 	return nil

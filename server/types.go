@@ -49,19 +49,27 @@ type WebSocketMessage struct {
 }
 
 type EncryptedMessageObject struct {
-	Type      string `json:"type"`
-	Content   string `json:"content"`
-	Verify    string `json:"verify"`
-	Signature string `json:"signature"`
+	Type      string          `json:"type"`
+	Content   string          `json:"content"`
+	Verify    string          `json:"verify"`
+	Signature HybridSignature `json:"signature"`
+}
+
+type HybridSignature struct {
+	Ed25519 string `json:"ed25519"`
+	MLDSA65 string `json:"mldsa65"`
+}
+
+type EncryptedKey struct {
+	Key       string          `json:"key"`
+	Signature HybridSignature `json:"signature"`
 }
 
 type EncryptedMessage struct {
-	Objects          []EncryptedMessageObject `json:"objects"`
-	EncryptedKeys    map[string]string        `json:"encryptedKeys"`
-	SigningPublicKey string                   `json:"signingPublicKey"`
-	Sender           string                   `json:"sender"`
-	KeySignatures    map[string]string        `json:"keySignatures"`
-	Signature        string                   `json:"signature"`
+	Signature     HybridSignature          `json:"signature"`
+	Objects       []EncryptedMessageObject `json:"objects"`
+	EncryptedKeys map[string]EncryptedKey  `json:"encryptedKeys"`
+	Sender        string                   `json:"sender"`
 }
 
 type SendReceipt struct {

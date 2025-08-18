@@ -3,6 +3,7 @@ package views
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"sebschat/globals"
 	"sebschat/types"
 	"sebschat/utils"
@@ -39,14 +40,14 @@ func showContactList(content *fyne.Container, win fyne.Window) {
 				editContactForm(win, &sorted[i], func(updated *types.Contact, deleted bool) {
 					if deleted {
 						for j, cc := range globals.Contacts {
-							if cc.Name == sorted[i].Name && cc.PublicKey == sorted[i].PublicKey {
+							if cc.Name == sorted[i].Name {
 								globals.Contacts = append(globals.Contacts[:j], globals.Contacts[j+1:]...)
 								break
 							}
 						}
 					} else if updated != nil {
 						for j, cc := range globals.Contacts {
-							if cc.Name == sorted[i].Name && cc.PublicKey == sorted[i].PublicKey {
+							if cc.Name == sorted[i].Name {
 								globals.Contacts[j] = *updated
 								break
 							}
@@ -132,44 +133,69 @@ func showExportContactDialog(win fyne.Window) {
 func addContactForm(win fyne.Window, onAdd func(*types.Contact), onCancel func()) fyne.CanvasObject {
 	nameEntry := widget.NewEntry()
 	nameEntry.SetPlaceHolder("Contact Name")
-	keyEntry := widget.NewMultiLineEntry()
-	keyEntry.SetPlaceHolder("Public Key")
+	x25519Entry := widget.NewMultiLineEntry()
+	x25519Entry.SetPlaceHolder("X25519 Public Key (base64)")
+	kyberEntry := widget.NewMultiLineEntry()
+	kyberEntry.SetPlaceHolder("Kyber768 Public Key (base64)")
+	ed25519Entry := widget.NewMultiLineEntry()
+	ed25519Entry.SetPlaceHolder("Ed25519 Public Key (base64)")
+	mldsaEntry := widget.NewMultiLineEntry()
+	mldsaEntry.SetPlaceHolder("MLDSA65 Public Key (base64)")
+
+	importBtn := widget.NewButton("Import from File", func() {
+		dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err != nil {
+				dialog.ShowError(err, win)
+				return
+			}
+			if reader == nil {
+				return
+			}
+			defer reader.Close()
+			data, err := io.ReadAll(reader)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("failed to read file: %v", err), win)
+				return
+			}
+			var imported types.KeyExchange
+			if err := json.Unmarshal(data, &imported); err != nil {
+				dialog.ShowError(fmt.Errorf("invalid contact file: %v", err), win)
+				return
+			}
+			nameEntry.SetText(imported.From)
+			x25519Entry.SetText(imported.Keys.X25519Pub)
+			kyberEntry.SetText(imported.Keys.PQKemPub)
+			ed25519Entry.SetText(imported.Keys.EdPub)
+			mldsaEntry.SetText(imported.Keys.PQSignPub)
+		}, win).Show()
+	})
 
 	form := &widget.Form{
 		Items: []*widget.FormItem{
 			widget.NewFormItem("Name", nameEntry),
-			widget.NewFormItem("Public Key", keyEntry),
+			widget.NewFormItem("X25519", x25519Entry),
+			widget.NewFormItem("Kyber768", kyberEntry),
+			widget.NewFormItem("Ed25519", ed25519Entry),
+			widget.NewFormItem("MLDSA65", mldsaEntry),
 		},
 		OnSubmit: func() {
-			if nameEntry.Text == "" || keyEntry.Text == "" {
-				dialog.ShowError(fmt.Errorf("both fields are required"), win)
+			if nameEntry.Text == "" || x25519Entry.Text == "" || kyberEntry.Text == "" || ed25519Entry.Text == "" || mldsaEntry.Text == "" {
+				dialog.ShowError(fmt.Errorf("all fields are required"), win)
 				return
 			}
-			onAdd(&types.Contact{Name: nameEntry.Text, PublicKey: keyEntry.Text})
+
+			onAdd(&types.Contact{
+				Name: nameEntry.Text,
+				Keys: types.HybridPublicKeys{
+					X25519Pub: x25519Entry.Text,
+					PQKemPub:  kyberEntry.Text,
+					EdPub:     ed25519Entry.Text,
+					PQSignPub: mldsaEntry.Text,
+				},
+			})
 		},
 		SubmitText: "Add",
 	}
-
-	importBtn := widget.NewButton("Import from File", func() {
-		dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
-			if err != nil || reader == nil {
-				return
-			}
-			defer reader.Close()
-			if reader.URI().Extension() != ".imp" {
-				dialog.ShowError(fmt.Errorf("please select a .imp file"), win)
-				return
-			}
-			var data types.KeyExchange
-			decoder := json.NewDecoder(reader)
-			if err := decoder.Decode(&data); err != nil {
-				dialog.ShowError(fmt.Errorf("failed to parse file: %v", err), win)
-				return
-			}
-			nameEntry.SetText(data.KeyFrom)
-			keyEntry.SetText(data.Key)
-		}, win)
-	})
 
 	cancelBtn := widget.NewButton("Cancel", func() {
 		onCancel()
@@ -186,20 +212,38 @@ func addContactForm(win fyne.Window, onAdd func(*types.Contact), onCancel func()
 func editContactForm(win fyne.Window, contact *types.Contact, onDone func(updated *types.Contact, deleted bool)) fyne.CanvasObject {
 	nameEntry := widget.NewEntry()
 	nameEntry.SetText(contact.Name)
-	keyEntry := widget.NewMultiLineEntry()
-	keyEntry.SetText(contact.PublicKey)
+	x25519Entry := widget.NewMultiLineEntry()
+	x25519Entry.SetText(contact.Keys.X25519Pub)
+	kyberEntry := widget.NewMultiLineEntry()
+	kyberEntry.SetText(contact.Keys.PQKemPub)
+	ed25519Entry := widget.NewMultiLineEntry()
+	ed25519Entry.SetText(contact.Keys.EdPub)
+	mldsaEntry := widget.NewMultiLineEntry()
+	mldsaEntry.SetText(contact.Keys.PQSignPub)
 
 	form := &widget.Form{
 		Items: []*widget.FormItem{
 			widget.NewFormItem("Name", nameEntry),
-			widget.NewFormItem("Public Key", keyEntry),
+			widget.NewFormItem("X25519", x25519Entry),
+			widget.NewFormItem("Kyber768", kyberEntry),
+			widget.NewFormItem("Ed25519", ed25519Entry),
+			widget.NewFormItem("MLDSA65", mldsaEntry),
 		},
 		OnSubmit: func() {
-			if nameEntry.Text == "" || keyEntry.Text == "" {
-				dialog.ShowError(fmt.Errorf("both fields are required"), win)
+			if nameEntry.Text == "" || x25519Entry.Text == "" || kyberEntry.Text == "" || ed25519Entry.Text == "" || mldsaEntry.Text == "" {
+				dialog.ShowError(fmt.Errorf("all fields are required"), win)
 				return
 			}
-			onDone(&types.Contact{Name: nameEntry.Text, PublicKey: keyEntry.Text}, false)
+
+			onDone(&types.Contact{
+				Name: nameEntry.Text,
+				Keys: types.HybridPublicKeys{
+					X25519Pub: x25519Entry.Text,
+					PQKemPub:  kyberEntry.Text,
+					EdPub:     ed25519Entry.Text,
+					PQSignPub: mldsaEntry.Text,
+				},
+			}, false)
 		},
 		SubmitText: "Save",
 	}

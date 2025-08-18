@@ -64,7 +64,7 @@ func decryptMessages(data []byte, history *fyne.Container, historyScroll *contai
 		return err
 	}
 
-	decrypted, err := cryptography.Decrypt(encryptedMessage, true)
+	decrypted, err := cryptography.Decrypt(&encryptedMessage)
 	if err != nil {
 		return err
 	}

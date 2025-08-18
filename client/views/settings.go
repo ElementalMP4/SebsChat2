@@ -1,6 +1,7 @@
 package views
 
 import (
+	"encoding/base64"
 	"fmt"
 	"image/color"
 	"sebschat/globals"
@@ -25,17 +26,25 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 	nameEntry := widget.NewEntry()
 	nameEntry.SetText(user.Name)
 
-	publicKeyEntry := widget.NewMultiLineEntry()
-	publicKeyEntry.SetText(user.PublicKey)
+	// Public Key fields
+	x25519PubEntry := widget.NewMultiLineEntry()
+	x25519PubEntry.SetText(user.Keys.Public.X25519Pub)
+	kyberPubEntry := widget.NewMultiLineEntry()
+	kyberPubEntry.SetText(user.Keys.Public.PQKemPub)
+	edPubEntry := widget.NewMultiLineEntry()
+	edPubEntry.SetText(user.Keys.Public.EdPub)
+	mldsaPubEntry := widget.NewMultiLineEntry()
+	mldsaPubEntry.SetText(user.Keys.Public.PQSignPub)
 
-	privateKeyEntry := widget.NewMultiLineEntry()
-	privateKeyEntry.SetText(user.PrivateKey)
-
-	signingPublicKeyEntry := widget.NewMultiLineEntry()
-	signingPublicKeyEntry.SetText(user.SigningPublicKey)
-
-	signingPrivateKeyEntry := widget.NewMultiLineEntry()
-	signingPrivateKeyEntry.SetText(user.SigningPrivateKey)
+	// Private Key fields
+	x25519PrivEntry := widget.NewMultiLineEntry()
+	x25519PrivEntry.SetText(user.Keys.Private.X25519Priv)
+	kyberPrivEntry := widget.NewMultiLineEntry()
+	kyberPrivEntry.SetText(user.Keys.Private.PQKemPriv)
+	edPrivEntry := widget.NewMultiLineEntry()
+	edPrivEntry.SetText(user.Keys.Private.EdPriv)
+	mldsaPrivEntry := widget.NewMultiLineEntry()
+	mldsaPrivEntry.SetText(user.Keys.Private.PQSignPriv)
 
 	// Server fields
 	addressEntry := widget.NewEntry()
@@ -59,26 +68,36 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 
 	// Store original values for change detection
 	original := struct {
-		Name, PublicKey, PrivateKey, SigningPublicKey, SigningPrivateKey, Address, FavouriteColour string
-		UseTls                                                                                     bool
+		Name, FavouriteColour, Address           string
+		UseTls                                   bool
+		X25519Pub, KyberPub, EdPub, MldsaPub     string
+		X25519Priv, KyberPriv, EdPriv, MldsaPriv string
 	}{
-		Name:              user.Name,
-		PublicKey:         user.PublicKey,
-		PrivateKey:        user.PrivateKey,
-		SigningPublicKey:  user.SigningPublicKey,
-		SigningPrivateKey: user.SigningPrivateKey,
-		Address:           user.Server.Address,
-		FavouriteColour:   user.FavouriteColour,
-		UseTls:            user.Server.UseTls,
+		Name:            user.Name,
+		FavouriteColour: user.FavouriteColour,
+		Address:         user.Server.Address,
+		UseTls:          user.Server.UseTls,
+		X25519Pub:       x25519PubEntry.Text,
+		KyberPub:        kyberPubEntry.Text,
+		EdPub:           edPubEntry.Text,
+		MldsaPub:        mldsaPubEntry.Text,
+		X25519Priv:      x25519PrivEntry.Text,
+		KyberPriv:       kyberPrivEntry.Text,
+		EdPriv:          edPrivEntry.Text,
+		MldsaPriv:       mldsaPrivEntry.Text,
 	}
 
 	// Helper to check if any field has changed
 	isChanged = func() bool {
 		return nameEntry.Text != original.Name ||
-			publicKeyEntry.Text != original.PublicKey ||
-			privateKeyEntry.Text != original.PrivateKey ||
-			signingPublicKeyEntry.Text != original.SigningPublicKey ||
-			signingPrivateKeyEntry.Text != original.SigningPrivateKey ||
+			x25519PubEntry.Text != original.X25519Pub ||
+			kyberPubEntry.Text != original.KyberPub ||
+			edPubEntry.Text != original.EdPub ||
+			mldsaPubEntry.Text != original.MldsaPub ||
+			x25519PrivEntry.Text != original.X25519Priv ||
+			kyberPrivEntry.Text != original.KyberPriv ||
+			edPrivEntry.Text != original.EdPriv ||
+			mldsaPrivEntry.Text != original.MldsaPriv ||
 			addressEntry.Text != original.Address ||
 			useTlsCheck.Checked != original.UseTls ||
 			favouriteColour != original.FavouriteColour
@@ -97,17 +116,69 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 	}
 
 	saveBtn = widget.NewButton("Save", func() {
+		// Decode all keys from base64
+		x25519Pub, err := base64.StdEncoding.DecodeString(x25519PubEntry.Text)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("invalid X25519 public key: %v", err), win)
+			return
+		}
+		kyberPub, err := base64.StdEncoding.DecodeString(kyberPubEntry.Text)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("invalid Kyber768 public key: %v", err), win)
+			return
+		}
+		edPub, err := base64.StdEncoding.DecodeString(edPubEntry.Text)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("invalid Ed25519 public key: %v", err), win)
+			return
+		}
+		mldsaPub, err := base64.StdEncoding.DecodeString(mldsaPubEntry.Text)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("invalid MLDSA65 public key: %v", err), win)
+			return
+		}
+		x25519Priv, err := base64.StdEncoding.DecodeString(x25519PrivEntry.Text)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("invalid X25519 private key: %v", err), win)
+			return
+		}
+		kyberPriv, err := base64.StdEncoding.DecodeString(kyberPrivEntry.Text)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("invalid Kyber768 private key: %v", err), win)
+			return
+		}
+		edPriv, err := base64.StdEncoding.DecodeString(edPrivEntry.Text)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("invalid Ed25519 private key: %v", err), win)
+			return
+		}
+		mldsaPriv, err := base64.StdEncoding.DecodeString(mldsaPrivEntry.Text)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("invalid MLDSA65 private key: %v", err), win)
+			return
+		}
+
 		globals.SelfUser = types.SelfUser{
-			Name:              nameEntry.Text,
-			PublicKey:         publicKeyEntry.Text,
-			PrivateKey:        privateKeyEntry.Text,
-			SigningPublicKey:  signingPublicKeyEntry.Text,
-			SigningPrivateKey: signingPrivateKeyEntry.Text,
-			FavouriteColour:   favouriteColour,
+			Name:            nameEntry.Text,
+			FavouriteColour: favouriteColour,
 			Server: types.Server{
 				Address: addressEntry.Text,
 				UseTls:  useTlsCheck.Checked,
 				Token:   globals.SelfUser.Server.Token,
+			},
+			Keys: types.HybridKeypair{
+				Public: types.HybridPublicKeys{
+					X25519Pub: utils.BytesToBase64(x25519Pub),
+					PQKemPub:  utils.BytesToBase64(kyberPub),
+					EdPub:     utils.BytesToBase64(edPub),
+					PQSignPub: utils.BytesToBase64(mldsaPub),
+				},
+				Private: types.HybridPrivateKeys{
+					X25519Priv: utils.BytesToBase64(x25519Priv),
+					PQKemPriv:  utils.BytesToBase64(kyberPriv),
+					EdPriv:     utils.BytesToBase64(edPriv),
+					PQSignPriv: utils.BytesToBase64(mldsaPriv),
+				},
 			},
 		}
 
@@ -118,13 +189,17 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 
 		// Update original values after save
 		original.Name = nameEntry.Text
-		original.PublicKey = publicKeyEntry.Text
-		original.PrivateKey = privateKeyEntry.Text
-		original.SigningPublicKey = signingPublicKeyEntry.Text
-		original.SigningPrivateKey = signingPrivateKeyEntry.Text
+		original.FavouriteColour = favouriteColour
 		original.Address = addressEntry.Text
 		original.UseTls = useTlsCheck.Checked
-		original.FavouriteColour = favouriteColour
+		original.X25519Pub = x25519PubEntry.Text
+		original.KyberPub = kyberPubEntry.Text
+		original.EdPub = edPubEntry.Text
+		original.MldsaPub = mldsaPubEntry.Text
+		original.X25519Priv = x25519PrivEntry.Text
+		original.KyberPriv = kyberPrivEntry.Text
+		original.EdPriv = edPrivEntry.Text
+		original.MldsaPriv = mldsaPrivEntry.Text
 
 		updateSaveBtn()
 	})
@@ -133,23 +208,45 @@ func SettingsUI(win fyne.Window) fyne.CanvasObject {
 
 	// Attach listeners to all fields
 	nameEntry.OnChanged = func(_ string) { updateSaveBtn() }
-	publicKeyEntry.OnChanged = func(_ string) { updateSaveBtn() }
-	privateKeyEntry.OnChanged = func(_ string) { updateSaveBtn() }
-	signingPublicKeyEntry.OnChanged = func(_ string) { updateSaveBtn() }
-	signingPrivateKeyEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	x25519PubEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	kyberPubEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	edPubEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	mldsaPubEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	x25519PrivEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	kyberPrivEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	edPrivEntry.OnChanged = func(_ string) { updateSaveBtn() }
+	mldsaPrivEntry.OnChanged = func(_ string) { updateSaveBtn() }
 	addressEntry.OnChanged = func(_ string) { updateSaveBtn() }
 	useTlsCheck.OnChanged = func(_ bool) { updateSaveBtn() }
+
+	// Group public and private keys
+	publicKeysGroup := container.NewVBox(
+		widget.NewLabel("Public Keys (base64):"),
+		widget.NewForm(
+			widget.NewFormItem("X25519", x25519PubEntry),
+			widget.NewFormItem("Kyber768", kyberPubEntry),
+			widget.NewFormItem("Ed25519", edPubEntry),
+			widget.NewFormItem("MLDSA65", mldsaPubEntry),
+		),
+	)
+	privateKeysGroup := container.NewVBox(
+		widget.NewLabel("Private Keys (base64):"),
+		widget.NewForm(
+			widget.NewFormItem("X25519", x25519PrivEntry),
+			widget.NewFormItem("Kyber768", kyberPrivEntry),
+			widget.NewFormItem("Ed25519", edPrivEntry),
+			widget.NewFormItem("MLDSA65", mldsaPrivEntry),
+		),
+	)
 
 	form := &widget.Form{
 		Items: []*widget.FormItem{
 			widget.NewFormItem("Name", nameEntry),
 			widget.NewFormItem("Favourite Colour", container.NewVBox(colourBtn, colourDisplay)),
-			widget.NewFormItem("Public Key", publicKeyEntry),
-			widget.NewFormItem("Private Key", privateKeyEntry),
-			widget.NewFormItem("Signing Public Key", signingPublicKeyEntry),
-			widget.NewFormItem("Signing Private Key", signingPrivateKeyEntry),
 			widget.NewFormItem("Server Address", addressEntry),
 			widget.NewFormItem("", useTlsCheck),
+			widget.NewFormItem("", publicKeysGroup),
+			widget.NewFormItem("", privateKeysGroup),
 		},
 	}
 

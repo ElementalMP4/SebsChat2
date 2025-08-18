@@ -9,4 +9,4 @@ linux:
 	fyne package -os linux -icon icon.png --release
 
 windows:
-	fyne package -os windows -icon icon.png --release
+	fyne package -os windows -icon icon.png --release --app-id com.elementalmp4.sebschat

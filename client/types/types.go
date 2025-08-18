@@ -13,18 +13,15 @@ type Contacts struct {
 }
 
 type Contact struct {
-	Name      string `json:"name"`
-	PublicKey string `json:"key"`
+	Name string           `json:"name"`
+	Keys HybridPublicKeys `json:"keys"`
 }
 
 type SelfUser struct {
-	Name              string `json:"name"`
-	PublicKey         string `json:"publicKey"`
-	PrivateKey        string `json:"privateKey"`
-	SigningPublicKey  string `json:"signingPublicKey"`
-	SigningPrivateKey string `json:"signingPrivateKey"`
-	Server            Server `json:"server"`
-	FavouriteColour   string `json:"favouriteColour"`
+	Name            string        `json:"name"`
+	Server          Server        `json:"server"`
+	FavouriteColour string        `json:"favouriteColour"`
+	Keys            HybridKeypair `json:"keys"`
 }
 
 type Server struct {
@@ -39,19 +36,52 @@ type MessageObject struct {
 }
 
 type EncryptedMessageObject struct {
-	Type      string `json:"type"`
-	Content   string `json:"content"`
-	Verify    string `json:"verify"`
-	Signature string `json:"signature"`
+	Type      string          `json:"type"`
+	Content   string          `json:"content"`
+	Verify    string          `json:"verify"`
+	Signature HybridSignature `json:"signature"`
+}
+
+type HybridSignature struct {
+	Ed25519 string `json:"ed25519"`
+	MLDSA65 string `json:"mldsa65"`
+}
+
+type EncryptedKey struct {
+	Key       string          `json:"key"`
+	Signature HybridSignature `json:"signature"`
 }
 
 type EncryptedMessage struct {
-	Signature        string                   `json:"signature"`
-	Objects          []EncryptedMessageObject `json:"objects"`
-	KeySignatures    map[string]string        `json:"keySignatures"`
-	EncryptedKeys    map[string]string        `json:"encryptedKeys"`
-	SigningPublicKey string                   `json:"signingPublicKey"`
-	Sender           string                   `json:"sender"`
+	Signature     HybridSignature          `json:"signature"`
+	Objects       []EncryptedMessageObject `json:"objects"`
+	EncryptedKeys map[string]EncryptedKey  `json:"encryptedKeys"`
+	Sender        string                   `json:"sender"`
+}
+
+type HybridKeypair struct {
+	Private HybridPrivateKeys `json:"private"`
+	Public  HybridPublicKeys  `json:"public"`
+}
+
+// In order:
+// X25519 (classical)
+// Kyber-768 KEM (PQ)
+// Ed25519 (classical signing)
+// ML-DSA-65 (PQ signing via CIRCL)
+
+type HybridPrivateKeys struct {
+	X25519Priv string `json:"x25519_priv"`
+	PQKemPriv  string `json:"kyber768_priv"`
+	EdPriv     string `json:"ed25519_priv"`
+	PQSignPriv string `json:"mldsa65_priv"`
+}
+
+type HybridPublicKeys struct {
+	X25519Pub string `json:"x25519_pub"`
+	PQKemPub  string `json:"kyber768_pub"`
+	EdPub     string `json:"ed25519_pub"`
+	PQSignPub string `json:"mldsa65_pub"`
 }
 
 type InputMessage struct {
@@ -71,8 +101,8 @@ type DecryptedMessage struct {
 }
 
 type KeyExchange struct {
-	KeyFrom string `json:"keyFrom"`
-	Key     string `json:"key"`
+	From string           `json:"from"`
+	Keys HybridPublicKeys `json:"keys"`
 }
 
 type LoginRequest struct {
