@@ -106,7 +106,7 @@ func Encrypt(msg types.InputMessage) (*types.EncryptedMessage, error) {
 			return nil, err
 		}
 
-		encryptedKeys[rid] = types.EncryptedKey{
+		encryptedKeys[utils.HashString(rid)] = types.EncryptedKey{
 			Key: utils.BytesToBase64(pkg),
 			Signature: types.HybridSignature{
 				Ed25519: utils.BytesToBase64(edSig),
@@ -169,7 +169,7 @@ func Encrypt(msg types.InputMessage) (*types.EncryptedMessage, error) {
 		Signature:     types.HybridSignature{},
 		Objects:       encObjects,
 		EncryptedKeys: encryptedKeys,
-		Sender:        globals.SelfUser.Name,
+		Sender:        utils.HashString(globals.SelfUser.Name),
 	}
 
 	err = log.TimedTask("Sign whole message", func() error {
@@ -224,17 +224,22 @@ func Decrypt(enc *types.EncryptedMessage) (*types.DecryptedMessage, error) {
 		pqSig                 []byte
 	)
 
-	keyPackage, ok := enc.EncryptedKeys[globals.SelfUser.Name]
+	keyPackage, ok := enc.EncryptedKeys[utils.HashString(globals.SelfUser.Name)]
 	if !ok {
 		return nil, fmt.Errorf("no encrypted key for this recipient")
 	}
 
+	sender := utils.GetContactFromHash(enc.Sender)
+	if sender == nil {
+		return nil, fmt.Errorf("sender not found in contacts")
+	}
+
 	err = log.TimedTask("Decode sender signing keys", func() error {
-		senderEdPubBytes, err = utils.Base64ToBytes(globals.SelfUser.Keys.Public.EdPub)
+		senderEdPubBytes, err = utils.Base64ToBytes(sender.Keys.EdPub)
 		if err != nil {
 			return fmt.Errorf("decode sender ed25519 public key: %w", err)
 		}
-		senderPQSignPubBytes, err = utils.Base64ToBytes(globals.SelfUser.Keys.Public.PQSignPub)
+		senderPQSignPubBytes, err = utils.Base64ToBytes(sender.Keys.PQSignPub)
 		if err != nil {
 			return fmt.Errorf("decode sender pq sign public key: %w", err)
 		}
@@ -383,7 +388,7 @@ func Decrypt(enc *types.EncryptedMessage) (*types.DecryptedMessage, error) {
 
 	return &types.DecryptedMessage{
 		Objects: objs,
-		Author:  enc.Sender,
+		Author:  sender.Name,
 	}, nil
 }
 

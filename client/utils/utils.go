@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image/color"
+	"io"
 	"net/http"
 	"os"
 	"sebschat/globals"
@@ -164,8 +165,13 @@ func SendEncryptedMessage(encrypted types.EncryptedMessage) error {
 	}
 	defer resp.Body.Close()
 
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read body from server")
+	}
+
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("message was rejected: %s", resp.Status)
+		return fmt.Errorf("message was rejected: %s - %s", resp.Status, string(respBytes))
 	}
 
 	return nil

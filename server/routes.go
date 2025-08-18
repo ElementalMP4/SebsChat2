@@ -1,9 +1,7 @@
 package main
 
 import (
-	"crypto/ed25519"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -186,34 +184,6 @@ func messageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
-
-	origSig := msg.Signature
-	msg.Signature = "" // Remove temporarily
-
-	canonicalJSON, err := canonicalize(msg)
-	if err != nil {
-		http.Error(w, "Failed to canonicalize message", http.StatusBadRequest)
-		return
-	}
-
-	sigBytes, err := base64.StdEncoding.DecodeString(origSig)
-	if err != nil {
-		http.Error(w, "Invalid signature encoding", http.StatusBadRequest)
-		return
-	}
-
-	pubKeyBytes, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
-	if err != nil {
-		http.Error(w, "Invalid signing public key", http.StatusBadRequest)
-		return
-	}
-
-	if !ed25519.Verify(pubKeyBytes, canonicalJSON, sigBytes) {
-		http.Error(w, "Signature verification failed", http.StatusBadRequest)
-		return
-	}
-
-	msg.Signature = origSig
 
 	if msg.Sender != hashUsername(username) {
 		http.Error(w, "Sender does not match token", http.StatusUnauthorized)
