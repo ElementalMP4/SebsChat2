@@ -1,22 +1,12 @@
 {
   "app_name": "sebschat",
   "build_files": [
-    "print-server.py",
-    "requirements.txt"
+    "go.mod",
+    "*.go",
+    "migrations/*.sql",
+    "static/*"
   ],
   "install_files": [
-    {
-      "file": "*.go",
-      "from": "cwd"
-    },
-    {
-      "file": "go.mod",
-      "from": "cwd"
-    },
-    {
-      "file": "go.sum",
-      "from": "cwd"
-    },
     {
       "file": "sebschat",
       "from": "build"
