@@ -1,5 +1,4 @@
 sebschat
-*.json
 .DS_Store
 *.exe
 *.app

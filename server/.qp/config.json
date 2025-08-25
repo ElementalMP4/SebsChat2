@@ -1,0 +1,28 @@
+{
+  "app_name": "sebschat",
+  "build_files": [
+    "print-server.py",
+    "requirements.txt"
+  ],
+  "install_files": [
+    {
+      "file": "*.go",
+      "from": "cwd"
+    },
+    {
+      "file": "go.mod",
+      "from": "cwd"
+    },
+    {
+      "file": "go.sum",
+      "from": "cwd"
+    },
+    {
+      "file": "sebschat",
+      "from": "build"
+    }
+  ],
+  "build_script": "scripts/build.sh",
+  "systemd": true,
+  "exec": "/opt/qp_apps/sebschat/sebschat"
+}
